@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2021 IBM Corp. and others
+ * Copyright (c) 2000, 2022 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -1800,7 +1800,6 @@ J9::Z::PrivateLinkage::buildVirtualDispatch(TR::Node * callNode, TR::RegisterDep
 
          if (!performGuardedDevirtualization &&
              !comp()->getOption(TR_DisableInterpreterProfiling) &&
-             comp()->getOption(TR_enableProfiledDevirtualization) &&
              TR_ValueProfileInfoManager::get(comp()) && resolvedMethod
              )
             {
@@ -1832,7 +1831,7 @@ J9::Z::PrivateLinkage::buildVirtualDispatch(TR::Node * callNode, TR::RegisterDep
                {
                TR_ResolvedMethod *profiledVirtualMethod = methodSymRef->getOwningMethod(comp())->getResolvedVirtualMethod(comp(),
                           (TR_OpaqueClassBlock *)topValue, methodSymRef->getOffset());
-               if (profiledVirtualMethod)
+               if (profiledVirtualMethod && !profiledVirtualMethod->isInterpreted())
                   {
                   if (comp()->getOption(TR_TraceCG))
                      {
@@ -1862,7 +1861,15 @@ J9::Z::PrivateLinkage::buildVirtualDispatch(TR::Node * callNode, TR::RegisterDep
 
             if (useProfiledValues)
                {
-               TR::Instruction * unloadableConstInstr = generateRILInstruction(cg(), TR::InstOpCode::LARL, callNode, RegZero, reinterpret_cast<uintptr_t*>(profiledClass));
+               TR::Instruction * unloadableConstInstr;
+               if (cg()->canUseRelativeLongInstructions(reinterpret_cast<uintptr_t>(profiledClass)))
+                  {
+                  unloadableConstInstr = generateRILInstruction(cg(), TR::InstOpCode::LARL, callNode, RegZero, reinterpret_cast<uintptr_t*>(profiledClass));
+                  }
+               else
+                  {
+                  unloadableConstInstr = genLoadAddressConstantInSnippet(cg(), callNode, reinterpret_cast<uintptr_t>(profiledClass), RegZero, NULL, dependencies, NULL, true);
+                  }
                if (fej9->isUnloadAssumptionRequired(profiledClass, comp()->getCurrentMethod()))
                   {
                   comp()->getStaticPICSites()->push_front(unloadableConstInstr);
