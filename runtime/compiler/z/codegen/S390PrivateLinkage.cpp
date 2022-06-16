@@ -1908,6 +1908,11 @@ J9::Z::PrivateLinkage::buildVirtualDispatch(TR::Node * callNode, TR::RegisterDep
       cursor = generateRXInstruction(cg(), TR::InstOpCode::getExtendedLoadOpCode(), callNode, RegRA,
                                        generateS390MemoryReference(classReg, offset, cg()));
 
+      if (debugObj)
+         {
+         debugObj->addInstructionComment(cursor, "classRegLoad, S390PrivateLinkage.cpp:1907");
+         }
+
       if (unresolvedSnippet)
          {
          ((TR::S390VirtualUnresolvedSnippet *)unresolvedSnippet)->setPatchVftInstruction(cursor);
@@ -3285,6 +3290,10 @@ J9::Z::PrivateLinkage::buildIndirectDispatch(TR::Node * callNode)
    // create register dependency conditions
    dependencies = generateRegisterDependencyConditions(getNumberOfDependencyGPRegisters(),
                      getNumberOfDependencyGPRegisters(), cg());
+
+   if (cg()->getDebug())
+      cg()->getDebug()->addInstructionComment(new (trHeapMemory()) TR::S390NOPInstruction(TR::InstOpCode::NOP, 2, callNode, cg()),
+                                              "start of buildVirtualDispatch()");
 
    argSize = buildArgs(callNode, dependencies, false, -1, vftReg);
    buildVirtualDispatch(callNode, dependencies, vftReg, argSize);
