@@ -721,6 +721,14 @@ void TR_UnloadedClassPicSite::compensate(TR_FrontEnd *, bool isSMP, void *)
             }
 
          }
+      //Check if LLILF followed by IIHF
+      else if (((*((uint16_t *)cursor) & (uint16_t)0xFF0F) == (uint16_t)0xC00F))
+         {
+         if (((*((uint16_t *)(cursor+6)) & (uint16_t)0xFF0F) == (uint16_t)0xC008))
+            *(int32_t *)(_picLocation+6) = -1;
+         else // change LLILF to LGFI
+            *(cursor+1) ^= (int8_t)0x0E;
+         }
       }
 #endif
       }
@@ -1168,7 +1176,12 @@ void TR_RedefinedClassPicSite::compensate(TR_FrontEnd *, bool isSMP, void *newKe
                   }
                }
             }
-
+         }
+      //Check if LLILF followed by IIHF
+      else if (((*((uint16_t *)cursor)     & (uint16_t)0xFF0F) == (uint16_t)0xC00F) &&
+               ((*((uint16_t *)(cursor+6)) & (uint16_t)0xFF0F) == (uint16_t)0xC008))
+         {
+         *(int32_t *)(_picLocation+6) = ((uintptr_t)newKey) >> 32;
          }
       }
 #endif
