@@ -721,12 +721,9 @@ void TR_UnloadedClassPicSite::compensate(TR_FrontEnd *, bool isSMP, void *)
             }
 
          }
-      //Check if LLILF followed by IIHF
+      //Change LLILF to LGFI
       else if (((*((uint16_t *)cursor) & (uint16_t)0xFF0F) == (uint16_t)0xC00F))
          {
-         if (((*((uint16_t *)(cursor+6)) & (uint16_t)0xFF0F) == (uint16_t)0xC008))
-            *(int32_t *)(_picLocation+6) = -1;
-         else // change LLILF to LGFI
             *(cursor+1) ^= (int8_t)0x0E;
          }
       }
@@ -734,7 +731,19 @@ void TR_UnloadedClassPicSite::compensate(TR_FrontEnd *, bool isSMP, void *)
       }
    else
       {
-      *(int64_t *)_picLocation = -1;
+#if (defined(TR_HOST_64BIT) && defined(TR_HOST_S390))
+      //Check if LLILF followed by IIHF
+      if (((*((uint16_t *)(_picLocation-2)) & (uint16_t)0xFF0F) == (uint16_t)0xC00F) &&
+          ((*((uint16_t *)(_picLocation+4)) & (uint16_t)0xFF0F) == (uint16_t)0xC008))
+         {
+         *(int32_t *)(_picLocation)   = -1;
+         *(int32_t *)(_picLocation+6) = -1;
+         }
+      else
+#endif
+         {
+         *(int64_t *)_picLocation = -1;
+         }
       }
 #elif defined(TR_HOST_POWER)
    // On PPC, the patching is on a 4-byte entity regardless of 32/64bit JIT
@@ -1177,18 +1186,24 @@ void TR_RedefinedClassPicSite::compensate(TR_FrontEnd *, bool isSMP, void *newKe
                }
             }
          }
-      //Check if LLILF followed by IIHF
-      else if (((*((uint16_t *)cursor)     & (uint16_t)0xFF0F) == (uint16_t)0xC00F) &&
-               ((*((uint16_t *)(cursor+6)) & (uint16_t)0xFF0F) == (uint16_t)0xC008))
-         {
-         *(int32_t *)(_picLocation+6) = ((uintptr_t)newKey) >> 32;
-         }
       }
 #endif
       }
    else
       {
-      *(int64_t *)_picLocation = (uintptr_t)newKey;
+#if (defined(TR_HOST_64BIT) && defined(TR_HOST_S390))
+      //Check if LLILF followed by IIHF
+      if (((*((uint16_t *)(_picLocation-2)) & (uint16_t)0xFF0F) == (uint16_t)0xC00F) &&
+          ((*((uint16_t *)(_picLocation+4)) & (uint16_t)0xFF0F) == (uint16_t)0xC008))
+         {
+         *(int32_t *)(_picLocation)   = ((uintptr_t)newKey);
+         *(int32_t *)(_picLocation+6) = ((uintptr_t)newKey) >> 32;
+         }
+      else
+#endif
+         {
+         *(int64_t *)_picLocation = (uintptr_t)newKey;
+         }
       }
 #elif defined(TR_HOST_POWER)
    extern void ppcCodeSync(unsigned char *codeStart, unsigned int codeSize);
