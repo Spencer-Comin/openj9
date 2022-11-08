@@ -32,7 +32,7 @@
 			<class name="org.openj9.test.java_lang.Test_String" />
 		</classes>
 	</test>
-	
+
 	<test name="NestmatesTest">
 		<classes>
 			<class name="org.openj9.test.nestmates.NestmatesTest" />
@@ -60,4 +60,10 @@
 			<class name="org.openj9.test.varhandle.TestVarHandleInfo"/>
 		</classes>
 	</test>
+
+	<test name="TestJavaUtilZipCRC32C">
+    	<classes>
+      		<class name="org.openj9.test.crc32c.TestJavaUtilZipCRC32C" />
+    	</classes>
+  	</test>
 </suite>
