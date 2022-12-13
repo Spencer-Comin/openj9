@@ -2054,7 +2054,7 @@ J9::Z::TreeEvaluator::inlineCRC32CUpdateBytes(TR::Node *node, TR::CodeGenerator 
    // Zero extend incoming 32 bit values
    TR::Register* remaining = cg->allocateRegister();
    generateRREInstruction(cg, TR::InstOpCode::LLGFR, node, offset, offset);
-   generateRREInstruction(cg, TR::InstOpCode::LLGFR, node, remaining, end);
+   generateRREInstruction(cg, TR::InstOpCode::LLGFR, node, end, end);
 
    // Calculate buffer pointer = array + offset
    // For updateBytes need to account for array header size
@@ -2062,7 +2062,7 @@ J9::Z::TreeEvaluator::inlineCRC32CUpdateBytes(TR::Node *node, TR::CodeGenerator 
    generateRXInstruction(cg, TR::InstOpCode::getLoadAddressOpCode(), node, buffer, generateS390MemoryReference(array, offset, isDirectBuffer ? 0 : TR::Compiler->om.contiguousArrayHeaderSizeInBytes(), cg));
 
    // Adjust remaining count for offset index
-   generateRRInstruction(cg, TR::InstOpCode::getSubstractRegOpCode(), node, remaining, offset);
+   generateRRRInstruction(cg, TR::InstOpCode::getSubtractThreeRegOpCode(), node, remaining, end, offset);
 
    // If less than 16B of input, branch to bytewise path
    // The vectorized path only works for multiples of 16B
@@ -2250,6 +2250,7 @@ J9::Z::TreeEvaluator::inlineCRC32CUpdateBytes(TR::Node *node, TR::CodeGenerator 
    // Check whether to continue with 16-bit folding
    generateS390CompareAndBranchInstruction(cg, TR::InstOpCode::getCmpLogicalOpCode(), node, remaining, 16, TR::InstOpCode::COND_BNL, foldBy1Loop, false, false, NULL, dependencies);
 
+   // Set up dependencies for registers not used in OOL call
    dependencies->addPostCondition(vScratch, TR::RealRegister::AssignAny);
    dependencies->addPostCondition(buffer, TR::RealRegister::AssignAny);
    // The CRC folding vectors need to be adjacent since we use VLM
@@ -2367,7 +2368,7 @@ J9::Z::TreeEvaluator::inlineCRC32CUpdateBytes(TR::Node *node, TR::CodeGenerator 
       debugObj->addInstructionComment(cursor, "Denotes start of OOL call to original CRC32C.updateBytes Java implementation");
 
    // Calculate proper offset
-   generateRRRInstruction(cg, TR::InstOpCode::SGRK, node, offset, end, remaining);
+   generateRRRInstruction(cg, TR::InstOpCode::getSubtractThreeRegOpCode(), node, offset, end, remaining);
 
    // Create dummy node for call
    TR::Node *callNode = TR::Node::createWithSymRef(node, TR::icall, 4, node->getSymbolReference());
