@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (c) 2017, 2022 IBM Corp. and others
+* Copyright (c) 2017, 2023 IBM Corp. and others
 *
 * This program and the accompanying materials are made available under
 * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -139,6 +139,28 @@ class RecognizedCallTransformer : public OMR::RecognizedCallTransformer
     *     \endcode
     */
    void process_java_lang_StringUTF16_toBytes(TR::TreeTop* treetop, TR::Node* node);
+   /** \brief
+    *     Transforms jdk/internal/util/ArraysSupport.vectorizedMismatch(Ljava/lang/Object;JLjava/lang/Object;JII)I
+    *     into an arraycmp, bit manipulation and iselect sequence with equivalent semantics.
+    *
+    *  \param treetop
+    *     The treetop which anchors the call node.
+    *
+    *  \param node
+    *     The call node representing a call to jdk/internal/util/ArraysSupport.vectorizedMismatch(Ljava/lang/Object;JLjava/lang/Object;JII)I
+    *     which has the following shape:
+    *
+    *     \code
+    *     icall  <jdk/internal/util/ArraysSupport.vectorizedMismatch(Ljava/lang/Object;JLjava/lang/Object;JII)I>
+    *       <a>
+    *       <aOffset>
+    *       <b>
+    *       <bOffset>
+    *       <length>
+    *       <log2ArrayIndexScale>
+    *     \endcode
+    */
+   void process_jdk_internal_util_ArraysSupport_vectorizedMismatch(TR::TreeTop* treetop, TR::Node* node);
    /** \brief
     *     Transforms java/lang/StrictMath.sqrt(D)D and java/lang/Math.sqrt(D)D into a CodeGen inlined function with equivalent semantics.
     *

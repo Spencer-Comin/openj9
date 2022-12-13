@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2022 IBM Corp. and others
+ * Copyright (c) 2000, 2023 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -3920,6 +3920,12 @@ void TR_ResolvedJ9Method::construct()
       {TR::unknownMethod}
       };
 
+   static X ArraysSupportMethods [] =
+      {
+      {x(TR::jdk_internal_util_ArraysSupport_vectorizedMismatch, "vectorizedMismatch", "(Ljava/lang/Object;JLjava/lang/Object;JII)I")},
+      {  TR::unknownMethod}
+      };
+
    struct Y { const char * _class; X * _methods; };
 
    /* classXX where XX is the number of characters in the class name */
@@ -4099,7 +4105,7 @@ void TR_ResolvedJ9Method::construct()
       { "com/ibm/jit/DecimalFormatHelper", DecimalFormatHelperMethods},
       { "jdk/internal/reflect/Reflection", ReflectionMethods },
       { "jdk/internal/util/Preconditions", PreconditionsMethods },
-
+      { "jdk/internal/util/ArraysSupport", ArraysSupportMethods },
       { 0 }
       };
    static Y class32[] =
