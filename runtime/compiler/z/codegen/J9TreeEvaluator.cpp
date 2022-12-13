@@ -2252,7 +2252,6 @@ J9::Z::TreeEvaluator::inlineCRC32CUpdateBytes(TR::Node *node, TR::CodeGenerator 
 
    dependencies->addPostCondition(vScratch, TR::RealRegister::AssignAny);
    dependencies->addPostCondition(buffer, TR::RealRegister::AssignAny);
-   dependencies->addPostCondition(vecConstantTablePtr, TR::RealRegister::AssignAny);
    // The CRC folding vectors need to be adjacent since we use VLM
    dependencies->addPostCondition(vFold1, TR::RealRegister::VRF1);
    dependencies->addPostCondition(vFold2, TR::RealRegister::VRF2);
@@ -2264,6 +2263,8 @@ J9::Z::TreeEvaluator::inlineCRC32CUpdateBytes(TR::Node *node, TR::CodeGenerator 
    dependencies->addPostCondition(vInput3, TR::RealRegister::VRF7);
    dependencies->addPostCondition(vInput4, TR::RealRegister::VRF8);
    // The constant vectors also need to be adjacent since we use VLM
+   TR::Register* vConstR5 = cg->allocateRegister(TR_VRF);
+   TR::Register* vConstRUPoly = cg->allocateRegister(TR_VRF);
    dependencies->addPostCondition(vConstPermLE2BE, TR::RealRegister::VRF9);
    dependencies->addPostCondition(vConstR2R1, TR::RealRegister::VRF10);
    dependencies->addPostCondition(vConstR4R3, TR::RealRegister::VRF11);
@@ -2304,7 +2305,6 @@ J9::Z::TreeEvaluator::inlineCRC32CUpdateBytes(TR::Node *node, TR::CodeGenerator 
    generateVRIaInstruction(cg, TR::InstOpCode::VLEIB, node, vShift, 0x20, 7);
    generateVRRcInstruction(cg, TR::InstOpCode::VSRLB, node, vFold2, vFold1, vShift, 0);
    generateVRRaInstruction(cg, TR::InstOpCode::VUPLL, node, vFold1, vFold1, 0, 0, 2);
-   TR::Register* vConstR5 = cg->allocateRegister(TR_VRF);
    generateVRRdInstruction(cg, TR::InstOpCode::VGFMA, node, vFold1, vConstR5, vFold1, vFold2, 0, 3);
 
    /**
@@ -2324,7 +2324,6 @@ J9::Z::TreeEvaluator::inlineCRC32CUpdateBytes(TR::Node *node, TR::CodeGenerator 
     * product is zero and does not contribute to the final result.
     */
 
-   TR::Register* vConstRUPoly = cg->allocateRegister(TR_VRF);
    generateVRRaInstruction(cg, TR::InstOpCode::VUPLL, node, vFold2, vFold1, 0, 0, 2);
    generateVRRcInstruction(cg, TR::InstOpCode::VGFM,  node, vFold2, vConstRUPoly, vFold2, 3);
 
@@ -2352,7 +2351,6 @@ J9::Z::TreeEvaluator::inlineCRC32CUpdateBytes(TR::Node *node, TR::CodeGenerator 
    cg->stopUsingRegister(vConstRUPoly);
    cg->stopUsingRegister(vConstCRCPoly);
    cg->stopUsingRegister(buffer);
-   cg->stopUsingRegister(vecConstantTablePtr);
 
    cursor = generateS390CompareAndBranchInstruction(cg, TR::InstOpCode::getCmpLogicalOpCode(), node, remaining, 0, TR::InstOpCode::COND_BNE, callJava, false, false, NULL, dependencies);
    if (debugObj)
