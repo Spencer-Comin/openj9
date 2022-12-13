@@ -3682,8 +3682,8 @@ J9::Z::CodeGenerator::suppressInliningOfRecognizedMethod(TR::RecognizedMethod me
       return true;
       }
 
-   static bool disableAccelerateCRC32C = (feGetEnv("TR_DisableAccelerateCRC32C") != NULL);
-   if (!disableAccelerateCRC32C && self()->getSupportsVectorRegisters())
+   static bool disableCRC32CAcceleration = (feGetEnv("TR_DisableCRC32CAcceleration") != NULL);
+   if (!disableCRC32CAcceleration && self()->getSupportsVectorRegisters())
       {
       if (method == TR::java_util_zip_CRC32C_updateBytes ||
          method == TR::java_util_zip_CRC32C_updateDirectByteBuffer)
@@ -4076,8 +4076,8 @@ J9::Z::CodeGenerator::inlineDirectCall(
          break;
       }
 
-   static bool disableAccelerateCRC32C = (feGetEnv("TR_DisableAccelerateCRC32C") != NULL);
-   if (!disableAccelerateCRC32C && self()->getSupportsVectorRegisters())
+   static bool disableCRC32CAcceleration = (feGetEnv("TR_DisableCRC32CAcceleration") != NULL);
+   if (!disableCRC32CAcceleration && self()->getSupportsVectorRegisters())
       {
       switch (methodSymbol->getRecognizedMethod())
          {

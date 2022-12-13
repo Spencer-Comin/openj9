@@ -2096,6 +2096,7 @@ J9::Z::TreeEvaluator::inlineCRC32CUpdateBytes(TR::Node *node, TR::CodeGenerator 
     */
 
    // Array of 16 rather than 12 because data snippets on Z must be a power of 2 size - See OMR issue #1815
+   // TODO: find out why BE constants don't work, and why we need to byteswap data
    uint64_t crc32cVectorConstants[16] =
       {
       0x0F0E0D0C0B0A0908ull, 0x0706050403020100ull,   // BE->LE
@@ -2106,17 +2107,12 @@ J9::Z::TreeEvaluator::inlineCRC32CUpdateBytes(TR::Node *node, TR::CodeGenerator 
       0x0000000000000000ull, 0x0000000105ec76f0ull,   // P'(x) << 1
       };
 
-   TR::Snippet* constants = cg->findOrCreateConstant(node, crc32cVectorConstants, 128);
-   TR::Register* vecConstantTablePtr = cg->allocateRegister();
+   TR::MemoryReference *constantsMemRef = generateS390MemoryReference(cg->findOrCreateConstant(node, crc32cVectorConstants, 128), cg, 0, node);
+   dependencies->addAssignAnyPostCondOnMemRef(constantsMemRef);
    // Vector constant registers
    TR::Register* vConstPermLE2BE = cg->allocateRegister(TR_VRF);
-   TR::Register* vConstR2R1 = cg->allocateRegister(TR_VRF);
-   TR::Register* vConstR4R3 = cg->allocateRegister(TR_VRF);
-   TR::Register* vConstR5 = cg->allocateRegister(TR_VRF);
-   TR::Register* vConstRUPoly = cg->allocateRegister(TR_VRF);
    TR::Register* vConstCRCPoly = cg->allocateRegister(TR_VRF);
-   generateRILInstruction(cg, TR::InstOpCode::LARL, node, vecConstantTablePtr, constants);
-   cursor = generateVRSaInstruction(cg, TR::InstOpCode::VLM, node, vConstPermLE2BE, vConstCRCPoly, generateS390MemoryReference(vecConstantTablePtr, 0, cg), 0);
+   cursor = generateVRSaInstruction(cg, TR::InstOpCode::VLM, node, vConstPermLE2BE, vConstCRCPoly, constantsMemRef, 0);
    if (debugObj)
       debugObj->addInstructionComment(cursor, "Populate vectors with CRC-32C reduction constants");
 
@@ -2172,6 +2168,7 @@ J9::Z::TreeEvaluator::inlineCRC32CUpdateBytes(TR::Node *node, TR::CodeGenerator 
    generateVRReInstruction(cg, TR::InstOpCode::VPERM, node, vInput3, vInput3, vInput3, vConstPermLE2BE);
    generateVRReInstruction(cg, TR::InstOpCode::VPERM, node, vInput4, vInput4, vInput4, vConstPermLE2BE);
 
+   TR::Register* vConstR2R1 = cg->allocateRegister(TR_VRF);
    // GF(2) multiply vFold1..vFold4 with reduction constants, fold (accumulate) with next data chunk and store in vFold1..vFold4
    generateVRRdInstruction(cg, TR::InstOpCode::VGFMA, node, vFold1, vConstR2R1, vFold1, vInput1, 0, 3);
    generateVRRdInstruction(cg, TR::InstOpCode::VGFMA, node, vFold2, vConstR2R1, vFold2, vInput2, 0, 3);
@@ -2192,6 +2189,7 @@ J9::Z::TreeEvaluator::inlineCRC32CUpdateBytes(TR::Node *node, TR::CodeGenerator 
    if (debugObj)
       debugObj->addInstructionComment(cursor, "reduce 4 vectors into 1");
 
+   TR::Register* vConstR4R3 = cg->allocateRegister(TR_VRF);
    // Fold vFold1..vFold4 into a single 128-bit value in vFold1
    generateVRRdInstruction(cg, TR::InstOpCode::VGFMA, node, vFold1, vConstR4R3, vFold1, vFold2, 0, 3);
    generateVRRdInstruction(cg, TR::InstOpCode::VGFMA, node, vFold1, vConstR4R3, vFold1, vFold3, 0, 3);
@@ -2252,7 +2250,6 @@ J9::Z::TreeEvaluator::inlineCRC32CUpdateBytes(TR::Node *node, TR::CodeGenerator 
    // Check whether to continue with 16-bit folding
    generateS390CompareAndBranchInstruction(cg, TR::InstOpCode::getCmpLogicalOpCode(), node, remaining, 16, TR::InstOpCode::COND_BNL, foldBy1Loop, false, false, NULL, dependencies);
 
-   // Registers not used in OOL
    dependencies->addPostCondition(vScratch, TR::RealRegister::AssignAny);
    dependencies->addPostCondition(buffer, TR::RealRegister::AssignAny);
    dependencies->addPostCondition(vecConstantTablePtr, TR::RealRegister::AssignAny);
@@ -2307,6 +2304,7 @@ J9::Z::TreeEvaluator::inlineCRC32CUpdateBytes(TR::Node *node, TR::CodeGenerator 
    generateVRIaInstruction(cg, TR::InstOpCode::VLEIB, node, vShift, 0x20, 7);
    generateVRRcInstruction(cg, TR::InstOpCode::VSRLB, node, vFold2, vFold1, vShift, 0);
    generateVRRaInstruction(cg, TR::InstOpCode::VUPLL, node, vFold1, vFold1, 0, 0, 2);
+   TR::Register* vConstR5 = cg->allocateRegister(TR_VRF);
    generateVRRdInstruction(cg, TR::InstOpCode::VGFMA, node, vFold1, vConstR5, vFold1, vFold2, 0, 3);
 
    /**
@@ -2326,6 +2324,7 @@ J9::Z::TreeEvaluator::inlineCRC32CUpdateBytes(TR::Node *node, TR::CodeGenerator 
     * product is zero and does not contribute to the final result.
     */
 
+   TR::Register* vConstRUPoly = cg->allocateRegister(TR_VRF);
    generateVRRaInstruction(cg, TR::InstOpCode::VUPLL, node, vFold2, vFold1, 0, 0, 2);
    generateVRRcInstruction(cg, TR::InstOpCode::VGFM,  node, vFold2, vConstRUPoly, vFold2, 3);
 
@@ -2360,8 +2359,8 @@ J9::Z::TreeEvaluator::inlineCRC32CUpdateBytes(TR::Node *node, TR::CodeGenerator 
       debugObj->addInstructionComment(cursor, "Jump to OOL call to original Java implementation if remaining data");
 
    /************************************** call original implementation for remainder  ******************************************/
-   TR::LabelSymbol* endICF = generateLabelSymbol(cg);
-   TR_S390OutOfLineCodeSection *outlinedCall = new (cg->trHeapMemory()) TR_S390OutOfLineCodeSection(callJava, endICF, cg);
+   TR::LabelSymbol* done = generateLabelSymbol(cg);
+   TR_S390OutOfLineCodeSection *outlinedCall = new (cg->trHeapMemory()) TR_S390OutOfLineCodeSection(callJava, done, cg);
    cg->getS390OutOfLineCodeSectionList().push_front(outlinedCall);
    outlinedCall->swapInstructionListsWithCompilation();
 
@@ -2389,7 +2388,7 @@ J9::Z::TreeEvaluator::inlineCRC32CUpdateBytes(TR::Node *node, TR::CodeGenerator 
 
    generateRRInstruction(cg, TR::InstOpCode::LGR, node, crc, newCRC);
    cg->stopUsingRegister(newCRC);
-   cursor = generateS390BranchInstruction(cg, TR::InstOpCode::BRC, TR::InstOpCode::COND_BRC, node, endICF);
+   cursor = generateS390BranchInstruction(cg, TR::InstOpCode::BRC, TR::InstOpCode::COND_BRC, node, done);
    if (debugObj)
       debugObj->addInstructionComment(cursor, "Return to main-line");
 
@@ -2408,7 +2407,7 @@ J9::Z::TreeEvaluator::inlineCRC32CUpdateBytes(TR::Node *node, TR::CodeGenerator 
    dependencies->addPostCondition(remaining, TR::RealRegister::AssignAny);
    dependencies->addPostCondition(crc, TR::RealRegister::AssignAny);
 
-   generateS390LabelInstruction(cg, TR::InstOpCode::label, node, endICF, dependencies);
+   generateS390LabelInstruction(cg, TR::InstOpCode::label, node, done, dependencies);
 
    node->setRegister(crc);
    cg->decReferenceCount(node->getChild(0));
