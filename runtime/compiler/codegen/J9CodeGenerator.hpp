@@ -482,14 +482,24 @@ public:
    void setSupportsInlineConcurrentLinkedQueue() { _j9Flags.set(SupportsInlineConcurrentLinkedQueue); }
 
    /** \brief
-	*   Determines whether the code generator supports inlining of java/lang/StringCoding.encodeASCII
-	*/
+   *   Determines whether the code generator supports inlining of java/lang/StringCoding.encodeASCII
+   */
    bool getSupportsInlineEncodeASCII() { return _j9Flags.testAny(SupportsInlineEncodeASCII); }
 
    /** \brief
-	*   The code generator supports inlining of java/lang/StringCoding.encodeASCII
-	*/
+   *   The code generator supports inlining of java/lang/StringCoding.encodeASCII
+   */
    void setSupportsInlineEncodeASCII() { _j9Flags.set(SupportsInlineEncodeASCII); }
+
+   /** \brief
+   *   Determines whether the code generator supports inlining of jdk/internal/util/ArraysSupport.vectorizedMismatch
+   */
+   bool getSupportsInlineVectorizedMismatch() { return _j9Flags.testAny(SupportsInlineVectorizedMismatch); }
+
+   /** \brief
+   *   The code generator supports inlining of jdk/internal/util/ArraysSupport.vectorizedMismatch
+   */
+   void setSupportsInlineVectorizedMismatch() { _j9Flags.set(SupportsInlineVectorizedMismatch); }
 
    /**
     * \brief
@@ -637,6 +647,7 @@ private:
       SupportsIntegerStringSize                           = 0x00000100,
       SupportsIntegerToChars                              = 0x00000200,
       SupportsInlineEncodeASCII                           = 0x00000400,
+      SupportsInlineVectorizedMismatch                    = 0x00000800,
       };
 
    flags32_t _j9Flags;
