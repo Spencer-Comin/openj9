@@ -2111,7 +2111,18 @@ J9::Z::TreeEvaluator::inlineCRC32CUpdateBytes(TR::Node *node, TR::CodeGenerator 
    dependencies->addAssignAnyPostCondOnMemRef(constantsMemRef);
    // Vector constant registers
    TR::Register* vConstPermLE2BE = cg->allocateRegister(TR_VRF);
+   TR::Register* vConstR2R1 = cg->allocateRegister(TR_VRF);
+   TR::Register* vConstR4R3 = cg->allocateRegister(TR_VRF);
+   TR::Register* vConstR5 = cg->allocateRegister(TR_VRF);
+   TR::Register* vConstRUPoly = cg->allocateRegister(TR_VRF);
    TR::Register* vConstCRCPoly = cg->allocateRegister(TR_VRF);
+   // The constant vectors need to be adjacent since we use VLM
+   dependencies->addPostCondition(vConstPermLE2BE, TR::RealRegister::VRF9);
+   dependencies->addPostCondition(vConstR2R1, TR::RealRegister::VRF10);
+   dependencies->addPostCondition(vConstR4R3, TR::RealRegister::VRF11);
+   dependencies->addPostCondition(vConstR5, TR::RealRegister::VRF12);
+   dependencies->addPostCondition(vConstRUPoly, TR::RealRegister::VRF13);
+   dependencies->addPostCondition(vConstCRCPoly, TR::RealRegister::VRF14);
    cursor = generateVRSaInstruction(cg, TR::InstOpCode::VLM, node, vConstPermLE2BE, vConstCRCPoly, constantsMemRef, 0);
    if (debugObj)
       debugObj->addInstructionComment(cursor, "Populate vectors with CRC-32C reduction constants");
@@ -2136,12 +2147,17 @@ J9::Z::TreeEvaluator::inlineCRC32CUpdateBytes(TR::Node *node, TR::CodeGenerator 
    if (debugObj)
       debugObj->addInstructionComment(cursor, "foldBy4");
 
-   // Vectors for CRC computation
+   // Allocate vectors for CRC computation
    TR::Register* vFold1 = cg->allocateRegister(TR_VRF);
    TR::Register* vFold2 = cg->allocateRegister(TR_VRF);
    TR::Register* vFold3 = cg->allocateRegister(TR_VRF);
    TR::Register* vFold4 = cg->allocateRegister(TR_VRF);
-
+   // The CRC folding vectors need to be adjacent since we use VLM
+   dependencies->addPostCondition(vFold1, TR::RealRegister::VRF1);
+   dependencies->addPostCondition(vFold2, TR::RealRegister::VRF2);
+   dependencies->addPostCondition(vFold3, TR::RealRegister::VRF3);
+   dependencies->addPostCondition(vFold4, TR::RealRegister::VRF4);
+   // Load first
    generateVRSaInstruction(cg, TR::InstOpCode::VLM, node, vFold1, vFold4, generateS390MemoryReference(buffer, 0, cg), 0);
    generateVRReInstruction(cg, TR::InstOpCode::VPERM, node, vFold1, vFold1, vFold1, vConstPermLE2BE);
    generateVRReInstruction(cg, TR::InstOpCode::VPERM, node, vFold2, vFold2, vFold2, vConstPermLE2BE);
@@ -2157,18 +2173,23 @@ J9::Z::TreeEvaluator::inlineCRC32CUpdateBytes(TR::Node *node, TR::CodeGenerator 
    if (debugObj)
       debugObj->addInstructionComment(cursor, "foldBy4Loop");
 
-   // Load the next 64-byte chunk of input
+   // Allocate vectors for loading input data
    TR::Register* vInput1 = cg->allocateRegister(TR_VRF);
    TR::Register* vInput2 = cg->allocateRegister(TR_VRF);
    TR::Register* vInput3 = cg->allocateRegister(TR_VRF);
    TR::Register* vInput4 = cg->allocateRegister(TR_VRF);
+   // The input vectors also need to be adjacent since we use VLM
+   dependencies->addPostCondition(vInput1, TR::RealRegister::VRF5);
+   dependencies->addPostCondition(vInput2, TR::RealRegister::VRF6);
+   dependencies->addPostCondition(vInput3, TR::RealRegister::VRF7);
+   dependencies->addPostCondition(vInput4, TR::RealRegister::VRF8);
+   // Load the next 64-byte chunk of input
    generateVRSaInstruction(cg, TR::InstOpCode::VLM, node, vInput1, vInput4, generateS390MemoryReference(buffer, 0, cg), 0);
    generateVRReInstruction(cg, TR::InstOpCode::VPERM, node, vInput1, vInput1, vInput1, vConstPermLE2BE);
    generateVRReInstruction(cg, TR::InstOpCode::VPERM, node, vInput2, vInput2, vInput2, vConstPermLE2BE);
    generateVRReInstruction(cg, TR::InstOpCode::VPERM, node, vInput3, vInput3, vInput3, vConstPermLE2BE);
    generateVRReInstruction(cg, TR::InstOpCode::VPERM, node, vInput4, vInput4, vInput4, vConstPermLE2BE);
 
-   TR::Register* vConstR2R1 = cg->allocateRegister(TR_VRF);
    // GF(2) multiply vFold1..vFold4 with reduction constants, fold (accumulate) with next data chunk and store in vFold1..vFold4
    generateVRRdInstruction(cg, TR::InstOpCode::VGFMA, node, vFold1, vConstR2R1, vFold1, vInput1, 0, 3);
    generateVRRdInstruction(cg, TR::InstOpCode::VGFMA, node, vFold2, vConstR2R1, vFold2, vInput2, 0, 3);
@@ -2189,7 +2210,6 @@ J9::Z::TreeEvaluator::inlineCRC32CUpdateBytes(TR::Node *node, TR::CodeGenerator 
    if (debugObj)
       debugObj->addInstructionComment(cursor, "reduce 4 vectors into 1");
 
-   TR::Register* vConstR4R3 = cg->allocateRegister(TR_VRF);
    // Fold vFold1..vFold4 into a single 128-bit value in vFold1
    generateVRRdInstruction(cg, TR::InstOpCode::VGFMA, node, vFold1, vConstR4R3, vFold1, vFold2, 0, 3);
    generateVRRdInstruction(cg, TR::InstOpCode::VGFMA, node, vFold1, vConstR4R3, vFold1, vFold3, 0, 3);
@@ -2250,28 +2270,9 @@ J9::Z::TreeEvaluator::inlineCRC32CUpdateBytes(TR::Node *node, TR::CodeGenerator 
    // Check whether to continue with 16-bit folding
    generateS390CompareAndBranchInstruction(cg, TR::InstOpCode::getCmpLogicalOpCode(), node, remaining, 16, TR::InstOpCode::COND_BNL, foldBy1Loop, false, false, NULL, dependencies);
 
-   // Set up dependencies for registers not used in OOL call
+   // Set up the rest of dependencies for registers not used in OOL call
    dependencies->addPostCondition(vScratch, TR::RealRegister::AssignAny);
    dependencies->addPostCondition(buffer, TR::RealRegister::AssignAny);
-   // The CRC folding vectors need to be adjacent since we use VLM
-   dependencies->addPostCondition(vFold1, TR::RealRegister::VRF1);
-   dependencies->addPostCondition(vFold2, TR::RealRegister::VRF2);
-   dependencies->addPostCondition(vFold3, TR::RealRegister::VRF3);
-   dependencies->addPostCondition(vFold4, TR::RealRegister::VRF4);
-   // The input vectors also need to be adjacent since we use VLM
-   dependencies->addPostCondition(vInput1, TR::RealRegister::VRF5);
-   dependencies->addPostCondition(vInput2, TR::RealRegister::VRF6);
-   dependencies->addPostCondition(vInput3, TR::RealRegister::VRF7);
-   dependencies->addPostCondition(vInput4, TR::RealRegister::VRF8);
-   // The constant vectors also need to be adjacent since we use VLM
-   TR::Register* vConstR5 = cg->allocateRegister(TR_VRF);
-   TR::Register* vConstRUPoly = cg->allocateRegister(TR_VRF);
-   dependencies->addPostCondition(vConstPermLE2BE, TR::RealRegister::VRF9);
-   dependencies->addPostCondition(vConstR2R1, TR::RealRegister::VRF10);
-   dependencies->addPostCondition(vConstR4R3, TR::RealRegister::VRF11);
-   dependencies->addPostCondition(vConstR5, TR::RealRegister::VRF12);
-   dependencies->addPostCondition(vConstRUPoly, TR::RealRegister::VRF13);
-   dependencies->addPostCondition(vConstCRCPoly, TR::RealRegister::VRF14);
 
    /************************************** final reduction of 128 bits ******************************************/
    cursor = generateS390LabelInstruction(cg, TR::InstOpCode::label, node, finalReduction, dependencies);
