@@ -2078,6 +2078,9 @@ J9::Z::TreeEvaluator::inlineCRC32CUpdateBytes(TR::Node *node, TR::CodeGenerator 
 
    // If less than 16B of input, branch to bytewise path
    // The vectorized path only works for multiples of 16B
+   TR::LabelSymbol* startOuterICF = generateLabelSymbol(cg);
+   generateS390LabelInstruction(cg, TR::InstOpCode::label, node, startOuterICF);
+   startOuterICF->setStartInternalControlFlow();
    TR::RegisterDependencyConditions* dependencies = new (cg->trHeapMemory()) TR::RegisterDependencyConditions(0, 19, cg);
    TR::LabelSymbol* callJava = generateLabelSymbol(cg);
    TR::Instruction* cursor = generateS390CompareAndBranchInstruction(cg, TR::InstOpCode::getCmpLogicalOpCode(), node, remaining, 16, TR::InstOpCode::COND_BL, callJava, false, false, NULL, dependencies);
@@ -2145,9 +2148,9 @@ J9::Z::TreeEvaluator::inlineCRC32CUpdateBytes(TR::Node *node, TR::CodeGenerator 
    generateVRSbInstruction(cg, TR::InstOpCode::VLVG, node, vScratch, crc, generateS390MemoryReference(3, cg), 2);
 
    // Jump to 16-byte processing path if less than 64 bytes of data
-   TR::LabelSymbol* startICF = generateLabelSymbol(cg);
-   generateS390LabelInstruction(cg, TR::InstOpCode::label, node, startICF);
-   startICF->setStartInternalControlFlow();
+   TR::LabelSymbol* startInnerICF = generateLabelSymbol(cg);
+   generateS390LabelInstruction(cg, TR::InstOpCode::label, node, startInnerICF);
+   startInnerICF->setStartInternalControlFlow();
    TR::LabelSymbol* foldBy1 = generateLabelSymbol(cg);
    cursor = generateS390CompareAndBranchInstruction(cg, TR::InstOpCode::getCmpLogicalOpCode(), node, remaining, 64, TR::InstOpCode::COND_BL, foldBy1, false, false, NULL, dependencies);
    if (debugObj)
@@ -2282,7 +2285,7 @@ J9::Z::TreeEvaluator::inlineCRC32CUpdateBytes(TR::Node *node, TR::CodeGenerator 
    // Check whether to continue with 16-bit folding
    generateS390CompareAndBranchInstruction(cg, TR::InstOpCode::getCmpLogicalOpCode(), node, remaining, 16, TR::InstOpCode::COND_BNL, foldBy1Loop, false, false, NULL, dependencies);
 
-   // Set up the rest of dependencies for ICF
+   // Set up the rest of dependencies for inner ICF
    dependencies->addPostCondition(vScratch, TR::RealRegister::AssignAny);
    dependencies->addPostCondition(buffer, TR::RealRegister::AssignAny);
    dependencies->addPostCondition(remaining, TR::RealRegister::AssignAny);
@@ -2412,15 +2415,33 @@ J9::Z::TreeEvaluator::inlineCRC32CUpdateBytes(TR::Node *node, TR::CodeGenerator 
    cg->stopUsingRegister(end);
    cg->stopUsingRegister(remaining);
 
-   // Dependencies common between main line and OOL
-   dependencies = new (cg->trHeapMemory()) TR::RegisterDependencyConditions(0, 5, cg);
+   // Dependencies for outer ICF
+   dependencies = new (cg->trHeapMemory()) TR::RegisterDependencyConditions(0, 23, cg);
    dependencies->addPostCondition(array, TR::RealRegister::AssignAny);
    dependencies->addPostCondition(offset, TR::RealRegister::AssignAny);
    dependencies->addPostCondition(end, TR::RealRegister::AssignAny);
-   dependencies->addPostCondition(remaining, TR::RealRegister::AssignAny);
    dependencies->addPostCondition(crc, TR::RealRegister::AssignAny);
+   dependencies->addPostCondition(vScratch, TR::RealRegister::AssignAny);
+   dependencies->addPostCondition(buffer, TR::RealRegister::AssignAny);
+   dependencies->addPostCondition(remaining, TR::RealRegister::AssignAny);
+   dependencies->addPostCondition(vFold1, TR::RealRegister::VRF1);
+   dependencies->addPostCondition(vFold2, TR::RealRegister::VRF2);
+   dependencies->addPostCondition(vFold3, TR::RealRegister::VRF3);
+   dependencies->addPostCondition(vFold4, TR::RealRegister::VRF4);
+   dependencies->addPostCondition(vInput1, TR::RealRegister::VRF5);
+   dependencies->addPostCondition(vInput2, TR::RealRegister::VRF6);
+   dependencies->addPostCondition(vInput3, TR::RealRegister::VRF7);
+   dependencies->addPostCondition(vInput4, TR::RealRegister::VRF8);
+   dependencies->addPostCondition(vConstPermLE2BE, TR::RealRegister::VRF9);
+   dependencies->addPostCondition(vConstR2R1, TR::RealRegister::VRF10);
+   dependencies->addPostCondition(vConstR4R3, TR::RealRegister::VRF11);
+   dependencies->addPostCondition(vConstR5, TR::RealRegister::VRF12);
+   dependencies->addPostCondition(vConstRUPoly, TR::RealRegister::VRF13);
+   dependencies->addPostCondition(vConstCRCPoly, TR::RealRegister::VRF14);
+   dependencies->addAssignAnyPostCondOnMemRef(constantsMemRef);
 
    generateS390LabelInstruction(cg, TR::InstOpCode::label, node, done, dependencies);
+   done->setEndInternalControlFlow();
 
    node->setRegister(crc);
    cg->decReferenceCount(node->getChild(0));
