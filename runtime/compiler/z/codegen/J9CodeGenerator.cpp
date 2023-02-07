@@ -123,6 +123,12 @@ J9::Z::CodeGenerator::initialize()
       cg->setSupportsInlineEncodeASCII();
       }
 
+   static char *disableInlineVectorizedMismatch = feGetEnv("TR_disableInlineVectorizedMismatch");
+   if (cg->getSupportsArrayCmp() && !disableInlineVectorizedMismatch)
+      {
+      cg->setSupportsInlineVectorizedMismatch();
+      }
+
    // Let's turn this on.  There is more work needed in the opt
    // to catch the case where the BNDSCHK is inserted after
    //

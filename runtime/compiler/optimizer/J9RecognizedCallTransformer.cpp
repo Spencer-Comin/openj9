@@ -327,63 +327,6 @@ void J9::RecognizedCallTransformer::process_java_lang_StringUTF16_toBytes(TR::Tr
    treetop->insertAfter(TR::TreeTop::create(comp(), TR::Node::create(node, TR::treetop, 1, newCallNode)));
    }
 
-/*
-This method inlines a call to ArraysSupport.vectorizedMismatch to a node equivalent to the following pseudocode
-
-   lengthInBytes = length << log2ArrayIndexScale
-   mask = (log2ArrayIndexScale<<1) | 3
-   n = lengthInBytes & ~(mask)
-   res = arrayCmpLen(a+aOffset, b+bOffset, n)
-   if (res == n)  // no mismatch found
-      return ~((lengthInBytes & mask) >> log2ArrayIndexScale)
-   else           // mismatch found
-      return res >> log2ArrayIndexScale
-
-Node before the transformation:
-
-   icall  jdk/internal/util/ArraysSupport.vectorizedMismatch(Ljava/lang/Object;JLjava/lang/Object;JII)I
-      <a>
-      <aOffset>
-      <b>
-      <bOffset>
-      <length>
-      <log2ArrayIndexScale>
-
-Node after the transformation:
-
-   iselect ()
-      icmpeq
-         arraycmp (arrayCmpLen )
-            aladd
-               <a>
-               <aOffset>
-            aladd
-               <b>
-               <bOffset>
-            i2l
-               iand
-                  ishl
-                     <length>
-                     <log2ArrayIndexScale>
-                  ixor
-                     ior
-                        ishl
-                           <log2ArrayIndexScale>
-                           iconst 1
-                        iconst 3
-                     iconst -1
-         ==>iand
-      ixor
-         ishr
-            iand
-               ==>ishl
-               ==>ior
-            <log2ArrayIndexScale>
-         ==>iconst -1
-      ishr
-         ==>arraycmp
-         <log2ArrayIndexScale>
-*/
 void J9::RecognizedCallTransformer::process_jdk_internal_util_ArraysSupport_vectorizedMismatch(TR::TreeTop* treetop, TR::Node* node)
    {
    TR::Node* a = node->getChild(0);
@@ -393,29 +336,29 @@ void J9::RecognizedCallTransformer::process_jdk_internal_util_ArraysSupport_vect
    TR::Node* length = node->getChild(4);
    TR::Node* log2ArrayIndexScale = node->getChild(5);
 
-   TR::Node* lengthInBytes = TR::Node::create(TR::ishl, 2, length, log2ArrayIndexScale);
-   TR::Node* mask = TR::Node::create(TR::ior, 2,
-                                     TR::Node::create(TR::ishl, 2,
-                                                      log2ArrayIndexScale,
-                                                      TR::Node::iconst(1)),
-                                     TR::Node::iconst(3));
-   TR::Node* n = TR::Node::create(TR::iand, 2,
-                                  lengthInBytes,
-                                  TR::Node::create(TR::ixor, 2, mask, TR::Node::iconst(-1)));
-   // TODO: replace the aladd's in the following with generateDataAddrLoadTrees when off heap memory changes come in
-   TR::Node* res = TR::Node::create(TR::arraycmp, 3,
-                                    TR::Node::create(TR::aladd, 2, a, aOffset),
-                                    TR::Node::create(TR::aladd, 2, b, bOffset),
-                                    TR::Node::create(TR::i2l, 1, n));
+   TR::Node* lengthInBytes = TR::Node::create(node, TR::ishl, 2, length, log2ArrayIndexScale);
+   TR::Node* mask = TR::Node::create(node, TR::ior, 2,
+      TR::Node::create(node, TR::ishl, 2,
+         log2ArrayIndexScale,
+         TR::Node::iconst(node, 1)),
+      TR::Node::iconst(node, 3));
+   TR::Node* n = TR::Node::create(node, TR::iand, 2,
+      lengthInBytes,
+      TR::Node::create(node, TR::ixor, 2, mask, TR::Node::iconst(node, -1)));
+   // TODO: replace the aladd's in the following with generateDataAddrLoadTrees when off-heap memory changes come in
+   TR::Node* res = TR::Node::create(node, TR::arraycmp, 3,
+      TR::Node::create(node, TR::aladd, 2, a, aOffset),
+      TR::Node::create(node, TR::aladd, 2, b, bOffset));
+   res->setAndIncChild(2, TR::Node::create(node, TR::i2l, 1, n));
    res->setArrayCmpLen(true);
    res->setSymbolReference(getSymRefTab()->findOrCreateArrayCmpSymbol());
-   TR::Node* thenNode = (TR::Node::create(TR::ixor, 2,
-                                          TR::Node::create(TR::ishr, 2,
-                                                           TR::Node::create(TR::iand, 2, lengthInBytes, mask),
-                                                           log2ArrayIndexScale),
-                                          TR::Node::iconst(-1)));
-   TR::Node* elseNode = TR::Node::create(TR::ishr, 2, res, log2ArrayIndexScale);
-   TR::Node* conditionNode = TR::Node::create(TR::icmpeq, 2, res, n);
+   TR::Node* thenNode = TR::Node::create(node, TR::ixor, 2,
+      TR::Node::create(node, TR::ishr, 2,
+         TR::Node::create(node, TR::iand, 2, lengthInBytes, mask),
+         log2ArrayIndexScale),
+      TR::Node::iconst(node, -1));
+   TR::Node* elseNode = TR::Node::create(node, TR::ishr, 2, res, log2ArrayIndexScale);
+   TR::Node* conditionNode = TR::Node::create(node, TR::icmpeq, 2, res, n);
 
    anchorAllChildren(node, treetop);
    prepareToReplaceNode(node);
@@ -1345,7 +1288,7 @@ bool J9::RecognizedCallTransformer::isInlineable(TR::TreeTop* treetop)
          case TR::java_lang_String_encodeASCII:
             return comp()->cg()->getSupportsInlineEncodeASCII();
          case TR::jdk_internal_util_ArraysSupport_vectorizedMismatch:
-            return comp()->cg()->getSupportsArrayCmp();
+            return comp()->cg()->getSupportsInlineVectorizedMismatch();
          default:
             return false;
          }
