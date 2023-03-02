@@ -66,4 +66,9 @@
 			<class name="org.openj9.test.crc32c.TestJavaUtilZipCRC32C" />
 		</classes>
 	</test>
+	<test name="TestJavaUtilArrays">
+		<classes>
+			<class name="org.openj9.test.arrays.TestJavaUtilArrays" />
+		</classes>
+	</test>
 </suite>
