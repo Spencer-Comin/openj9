@@ -8989,23 +8989,23 @@ CISCTransform2ArrayCmp2Ifs(TR_CISCTransformer *trans)
    TR::TreeTop * newLastTreeTop[2];
 
    // Using the CLCL instruction
-   lengthNode = createI2LIfNecessary(comp, trans->isGenerateI2L(), lengthNode);
-   TR::Node * arraycmplen = TR::Node::create(TR::arraycmp, 3, input1Node, input2Node, lengthNode);
-   arraycmplen->setArrayCmpLen(true);
-   arraycmplen->setSymbolReference(comp->getSymRefTab()->findOrCreateArrayCmpSymbol());
+   lengthNode = TR::Node::create(TR::iu2l, 1, lengthNode);
+   TR::Node * arraycmplen = TR::Node::create(TR::arraycmplen, 3, input1Node, input2Node, lengthNode);
+   arraycmplen->setSymbolReference(comp->getSymRefTab()->findOrCreateArrayCmpLenSymbol());
 
    TR::SymbolReference * resultSymRef = comp->getSymRefTab()->
-      createTemporary(comp->getMethodSymbol(), TR::Int32);
+      createTemporary(comp->getMethodSymbol(), TR::Int64);
    topArraycmp = TR::Node::createStore(resultSymRef, arraycmplen);
 
    TR::Node * resultLoad = TR::Node::createLoad(topArraycmp, resultSymRef);
    TR::Node * equalLen = resultLoad;
    if (shrCount != 0)
       {
-      equalLen = TR::Node::create(TR::ishr, 2,
+      equalLen = TR::Node::create(TR::lshr, 2,
                                  equalLen,
                                  TR::Node::create(equalLen, TR::iconst, 0, shrCount));
       }
+   equalLen = TR::Node::create(TR::l2i, 1, equalLen);
 
    TR::Node *tmpNode = createStoreOP2(comp, src1IdxSymRef, TR::iadd, src1IdxSymRef, equalLen, trNode);
    newFirstTreeTop[0] = TR::TreeTop::create(comp, tmpNode);
@@ -9351,6 +9351,14 @@ CISCTransform2ArrayCmp(TR_CISCTransformer *trans)
          generateArraycmplen = true;
          }
       }
+   if (generateArraycmplen)
+      {
+      if (!comp->cg()->getSupportsArrayCmpLen())
+         {
+         dumpOptDetails(comp, "Bailing CISCTransform2ArrayCmp. Arraycmplen length is needed to continue this transformation, but codgen does not support arraycmplen.\n");
+         return false;
+         }
+      }
 
    // check the indices used in the array loads and
    // the store nodes
@@ -9552,21 +9560,21 @@ CISCTransform2ArrayCmp(TR_CISCTransformer *trans)
       {
       // Using the CLCL instruction
 
-      TR::Node * arraycmplen = TR::Node::create(TR::arraycmp, 3, input1Node, input2Node, createI2LIfNecessary(comp, trans->isGenerateI2L(), lengthNode));
-      arraycmplen->setArrayCmpLen(true);
-      arraycmplen->setSymbolReference(comp->getSymRefTab()->findOrCreateArrayCmpSymbol());
+      TR::Node * arraycmplen = TR::Node::create(TR::arraycmplen, 3, input1Node, input2Node, TR::Node::create(TR::iu2l, 1, lengthNode));
+      arraycmplen->setSymbolReference(comp->getSymRefTab()->findOrCreateArrayCmpLenSymbol());
 
-      TR::SymbolReference * resultSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), TR::Int32);
+      TR::SymbolReference * resultSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), TR::Int64);
       topArraycmp = TR::Node::createStore(resultSymRef, arraycmplen);
 
       TR::Node * resultLoad = TR::Node::createLoad(topArraycmp, resultSymRef);
       TR::Node * equalLen = resultLoad;
       if (shrCount != 0)
          {
-         equalLen = TR::Node::create(TR::ishr, 2,
+         equalLen = TR::Node::create(TR::lshr, 2,
                                     equalLen,
                                     TR::Node::create(equalLen, TR::iconst, 0, shrCount));
          }
+      equalLen = TR::Node::create(TR::l2i, 1, equalLen);
 
       TR::Node *tmpNode = createStoreOP2(comp, src1IdxSymRef, TR::iadd, src1IdxSymRef, equalLen, trNode);
       newFirstTreeTop = TR::TreeTop::create(comp, tmpNode);
@@ -9581,8 +9589,8 @@ CISCTransform2ArrayCmp(TR_CISCTransformer *trans)
          newLastTreeTop = tmpTreeTop;
          }
 
-      tmpNode = TR::Node::createif(TR::ificmpeq,
-                                  lengthNode,
+      tmpNode = TR::Node::createif(TR::iflcmpeq,
+                                  TR::Node::create(TR::iu2l, 1, lengthNode),
                                   resultLoad,
                                   okDest);
       tmpTreeTop = TR::TreeTop::create(comp, tmpNode);
