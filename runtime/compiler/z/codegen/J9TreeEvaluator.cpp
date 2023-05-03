@@ -3552,7 +3552,7 @@ VMnonNullSrcWrtBarCardCheckEvaluator(
       TR::InstOpCode::Mnemonic opSubtractReg = TR::InstOpCode::getSubstractRegOpCode();
       TR::InstOpCode::Mnemonic opSubtract = TR::InstOpCode::getSubstractOpCode();
       TR::InstOpCode::Mnemonic opCmpLog = TR::InstOpCode::getCmpLogicalOpCode();
-      bool disableSrcObjCheck = true; //comp->getOption(TR_DisableWrtBarSrcObjCheck);
+      bool disableSrcObjCheck = feGetEnv("TR_disableSrcObjCheck") != NULL;
       bool constantHeapCase = ((!comp->compileRelocatableCode()) && isConstantHeapBase && isConstantHeapSize && shiftAmount == 0 && (!is64Bit || TR::Compiler->om.generateCompressedObjectHeaders()));
       if (constantHeapCase)
          {
