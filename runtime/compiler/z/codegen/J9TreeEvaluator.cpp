@@ -3947,6 +3947,7 @@ J9::Z::TreeEvaluator::asynccheckEvaluator(TR::Node * node, TR::CodeGenerator * c
 
          if (tempMR->getIndexRegister() != NULL && tempMR->getBaseRegister() != NULL)
             {
+            TR_ASSERT_FATAL_WITH_NODE(node, false, "Turns out we do enter this block");
             TR::SymbolReference * symRef = firstChild->getSymbolReference();
             TR::Symbol * symbol = symRef->getSymbol();
             TR::Register * src1Reg = NULL;
