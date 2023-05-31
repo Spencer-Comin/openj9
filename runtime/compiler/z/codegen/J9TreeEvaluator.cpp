@@ -3428,8 +3428,14 @@ static bool generateInlineTest(TR::CodeGenerator * cg, TR::Node * node, TR::Node
    for (i = 0; i < num_PICs; i++)
       {
       dumpOptDetails(comp, "inline test with guess class address of %p\n", guessClassArray[i]);
+      if (cg->needClassAndMethodPointerRelocations())
+         unloadableConstInstr[i] = generateRegLitRefInstruction(cg, TR::InstOpCode::getLoadOpCode(), node, scratchReg,(uintptr_t) guessClassArray[i], TR_ClassPointer, NULL, NULL, NULL);
+      else
+         unloadableConstInstr[i] = generateRILInstruction(cg, TR::InstOpCode::LARL, node, scratchReg, guessClassArray[i]);
 
-      unloadableConstInstr[i] = genLoadProfiledClassAddressConstant(cg, node, guessClassArray[i], scratchReg, NULL, NULL, NULL);
+      if (fej9->isUnloadAssumptionRequired((TR_OpaqueClassBlock *)(guessClassArray[i]), comp->getCurrentMethod()))
+         comp->getStaticPICSites()->push_front(unloadableConstInstr[i]);
+
       result_bool = fej9->instanceOfOrCheckCast((J9Class*)(guessClassArray[i]), (J9Class*)castClassAddr);
       result_label = (falseLabel != trueLabel ) ? (result_bool ? trueLabel : falseLabel) : doneLabel;
 
@@ -4394,7 +4400,15 @@ J9::Z::TreeEvaluator::checkcastEvaluator(TR::Node * node, TR::CodeGenerator * cg
             cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "checkCastStats/(%s)/Profiled", comp->signature()),1,TR::DebugCounter::Undetermined);
             while (numPICs < numberOfProfiledClass)
                {
-               genLoadProfiledClassAddressConstant(cg, node, profiledClassesList[numPICs].profiledClass, arbitraryClassReg1, NULL, NULL, NULL);
+               if (cg->needClassAndMethodPointerRelocations())
+                  temp = generateRegLitRefInstruction(cg, TR::InstOpCode::getLoadOpCode(), node, arbitraryClassReg1, (uintptr_t) profiledClassesList[numPICs].profiledClass, TR_ClassPointer, NULL, NULL, NULL);
+               else
+                  temp = generateRILInstruction(cg, TR::InstOpCode::LARL, node, arbitraryClassReg1, profiledClassesList[numPICs].profiledClass);
+
+               // Adding profiled classes to static PIC sites
+               if (fej9->isUnloadAssumptionRequired((TR_OpaqueClassBlock *)(profiledClassesList[numPICs].profiledClass), comp->getCurrentMethod()))
+                  comp->getStaticPICSites()->push_front(temp);
+
                temp = generateS390CompareAndBranchInstruction(cg, TR::InstOpCode::getCmpRegOpCode(), node, arbitraryClassReg1, objClassReg, TR::InstOpCode::COND_BE, resultLabel, false, false);
                numPICs++;
                }
@@ -8798,7 +8812,15 @@ J9::Z::TreeEvaluator::VMgenCoreInstanceofEvaluator(TR::Node * node, TR::CodeGene
             cg->generateDebugCounter(TR::DebugCounter::debugCounterName(comp, "instanceOfStats/(%s)/Profile", comp->signature()),1,TR::DebugCounter::Undetermined);
             while (numPICs < numberOfProfiledClass)
                {
-               genLoadProfiledClassAddressConstant(cg, node, profiledClassesList[numPICs].profiledClass, arbitraryClassReg1, NULL, NULL, NULL);
+               if (cg->needClassAndMethodPointerRelocations())
+                  temp = generateRegLitRefInstruction(cg, TR::InstOpCode::getLoadOpCode(), node, arbitraryClassReg1, (uintptr_t) profiledClassesList[numPICs].profiledClass, TR_ClassPointer, NULL, NULL, NULL);
+               else
+                  temp = generateRILInstruction(cg, TR::InstOpCode::LARL, node, arbitraryClassReg1, profiledClassesList[numPICs].profiledClass);
+
+               // Adding profiled class to the static PIC slots.
+               if (fej9->isUnloadAssumptionRequired((TR_OpaqueClassBlock *)(profiledClassesList[numPICs].profiledClass), comp->getCurrentMethod()))
+                  comp->getStaticPICSites()->push_front(temp);
+
                if (profiledClassesList[numPICs].isProfiledClassInstanceOfCastClass)
                   generateS390CompareAndBranchInstruction(cg, TR::InstOpCode::getCmpRegOpCode(), node, arbitraryClassReg1, objClassReg, TR::InstOpCode::COND_BE, trueLabel, false, false);
                else

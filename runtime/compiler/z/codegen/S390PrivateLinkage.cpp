@@ -1851,7 +1851,11 @@ J9::Z::PrivateLinkage::buildVirtualDispatch(TR::Node * callNode, TR::RegisterDep
 
             if (useProfiledValues)
                {
-               genLoadProfiledClassAddressConstant(cg(), callNode, profiledClass, RegZero, NULL, dependencies, NULL);
+               TR::Instruction * unloadableConstInstr = generateRILInstruction(cg(), TR::InstOpCode::LARL, callNode, RegZero, reinterpret_cast<uintptr_t*>(profiledClass));
+               if (fej9->isUnloadAssumptionRequired(profiledClass, comp()->getCurrentMethod()))
+                  {
+                  comp()->getStaticPICSites()->push_front(unloadableConstInstr);
+                  }
                generateS390CompareAndBranchInstruction(cg(), TR::InstOpCode::getCmpLogicalRegOpCode(), callNode, vftReg, RegZero, TR::InstOpCode::COND_BNE, virtualLabel);
                }
 
