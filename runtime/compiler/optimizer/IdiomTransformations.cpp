@@ -8978,9 +8978,6 @@ makeMixedMemSetGraph(TR::Compilation *c, int32_t ctrl)
 //        ImportantNode(4) - increment the array index for src1
 //        ImportantNode(5) - increment the array index for src2
 //        ImportantNode(6) - the size of elements (NULL for byte arrays)
-//
-// Note: If we need to know the position where characters are different, we generate arraycmplen.
-//       Otherwise, we generate arraycmp.
 //*****************************************************************************************
 bool
 CISCTransform2ArrayCmp2Ifs(TR_CISCTransformer *trans)
@@ -9202,32 +9199,15 @@ CISCTransform2ArrayCmp2Ifs(TR_CISCTransformer *trans)
    TR::Node * arraycmplen = TR::Node::create(TR::arraycmplen, 3, input1Node, input2Node, lengthNode);
    arraycmplen->setSymbolReference(comp->getSymRefTab()->findOrCreateArrayCmpLenSymbol());
 
-   TR::Node *equalLen;
-   if (comp->target().is64Bit())
+   arraycmplen = TR::Node::create(TR::l2i, 1, arraycmplen);
+   TR::SymbolReference * resultSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), TR::Int32);
+   topArraycmp = TR::Node::createStore(resultSymRef, arraycmplen);
+   TR::Node *equalLen = TR::Node::createLoad(topArraycmp, resultSymRef);
+   if (shrCount != 0)
       {
-      TR::SymbolReference * resultSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), TR::Int64);
-      topArraycmp = TR::Node::createStore(resultSymRef, arraycmplen);
-      equalLen = TR::Node::createLoad(topArraycmp, resultSymRef);
-      if (shrCount != 0)
-         {
-         equalLen = TR::Node::create(TR::lshr, 2,
-                                    equalLen,
-                                    TR::Node::create(equalLen, TR::iconst, 0, shrCount));
-         }
-      equalLen = TR::Node::create(TR::l2i, 1, equalLen);
-      }
-   else
-      {
-      arraycmplen = TR::Node::create(TR::l2i, 1, arraycmplen);
-      TR::SymbolReference * resultSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), TR::Int32);
-      topArraycmp = TR::Node::createStore(resultSymRef, arraycmplen);
-      equalLen = TR::Node::createLoad(topArraycmp, resultSymRef);
-      if (shrCount != 0)
-         {
-         equalLen = TR::Node::create(TR::ishr, 2,
-                                    equalLen,
-                                    TR::Node::create(equalLen, TR::iconst, 0, shrCount));
-         }
+      equalLen = TR::Node::create(TR::ishr, 2,
+                                 equalLen,
+                                 TR::Node::create(equalLen, TR::iconst, 0, shrCount));
       }
 
    TR::Node *tmpNode = createStoreOP2(comp, src1IdxSymRef, TR::iadd, src1IdxSymRef, equalLen, trNode);
@@ -9785,37 +9765,16 @@ CISCTransform2ArrayCmp(TR_CISCTransformer *trans)
       TR::Node * arraycmplen = TR::Node::create(TR::arraycmplen, 3, input1Node, input2Node, TR::Node::create(lengthNode, TR::iu2l, 1, lengthNode));
       arraycmplen->setSymbolReference(comp->getSymRefTab()->findOrCreateArrayCmpLenSymbol());
 
-      TR::Node *equalLen;
-      TR::Node *resultLoad;
-      bool is64Bit = comp->target().is64Bit();
-
-      if (is64Bit)
+      arraycmplen = TR::Node::create(TR::l2i, 1, arraycmplen);
+      TR::SymbolReference * resultSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), TR::Int32);
+      topArraycmp = TR::Node::createStore(resultSymRef, arraycmplen);
+      TR::Node *resultLoad = TR::Node::createLoad(topArraycmp, resultSymRef);
+      TR::Node *equalLen = resultLoad;
+      if (shrCount != 0)
          {
-         TR::SymbolReference * resultSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), TR::Int64);
-         topArraycmp = TR::Node::createStore(resultSymRef, arraycmplen);
-         resultLoad = TR::Node::createLoad(topArraycmp, resultSymRef);
-         equalLen = resultLoad;
-         if (shrCount != 0)
-            {
-            equalLen = TR::Node::create(TR::lshr, 2,
-                                       equalLen,
-                                       TR::Node::create(equalLen, TR::iconst, 0, shrCount));
-            }
-         equalLen = TR::Node::create(TR::l2i, 1, equalLen);
-         }
-      else
-         {
-         arraycmplen = TR::Node::create(TR::l2i, 1, arraycmplen);
-         TR::SymbolReference * resultSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), TR::Int32);
-         topArraycmp = TR::Node::createStore(resultSymRef, arraycmplen);
-         resultLoad = TR::Node::createLoad(topArraycmp, resultSymRef);
-         equalLen = resultLoad;
-         if (shrCount != 0)
-            {
-            equalLen = TR::Node::create(TR::ishr, 2,
-                                       equalLen,
-                                       TR::Node::create(equalLen, TR::iconst, 0, shrCount));
-            }
+         equalLen = TR::Node::create(TR::ishr, 2,
+                                    equalLen,
+                                    TR::Node::create(equalLen, TR::iconst, 0, shrCount));
          }
 
       TR::Node *tmpNode = createStoreOP2(comp, src1IdxSymRef, TR::iadd, src1IdxSymRef, equalLen, trNode);
@@ -9831,10 +9790,7 @@ CISCTransform2ArrayCmp(TR_CISCTransformer *trans)
          newLastTreeTop = tmpTreeTop;
          }
 
-      if (is64Bit)
-         tmpNode = TR::Node::createif(TR::iflcmpeq, TR::Node::create(TR::iu2l, 1, lengthNode), resultLoad, okDest);
-      else
-         tmpNode = TR::Node::createif(TR::ificmpeq, lengthNode, resultLoad, okDest);
+      tmpNode = TR::Node::createif(TR::ificmpeq, lengthNode, resultLoad, okDest);
 
       tmpTreeTop = TR::TreeTop::create(comp, tmpNode);
       newLastTreeTop->join(tmpTreeTop);
