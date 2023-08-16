@@ -76,6 +76,12 @@ J9::ARM64::CodeGenerator::initialize()
       {
       comp->setOption(TR_EnableMonitorCacheLookup);
       }
+
+   static bool disableInlineVectorizedMismatch = feGetEnv("TR_disableInlineVectorizedMismatch") != NULL;
+   if (cg->getSupportsArrayCmpLen() && !disableInlineVectorizedMismatch)
+      {
+      cg->setSupportsInlineVectorizedMismatch();
+      }
    }
 
 TR::Linkage *
