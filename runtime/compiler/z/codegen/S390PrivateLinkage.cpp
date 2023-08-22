@@ -2122,7 +2122,8 @@ J9::Z::PrivateLinkage::buildVirtualDispatch(TR::Node * callNode, TR::RegisterDep
             }
          else
             {
-            useCLFIandBRCL = false && (comp()->target().is64Bit() &&  // Support for 64-bit
+            static bool allowCLFIandBRCL = feGetEnv("CLFIandBRCL") != NULL;
+            useCLFIandBRCL = (allowCLFIandBRCL && comp()->target().is64Bit() &&  // Support for 64-bit
                                    TR::Compiler->om.generateCompressedObjectHeaders() // Classes are <2GB on CompressedRefs only.
                                    );
 
