@@ -1472,55 +1472,55 @@ TR::J9S390InterfaceCallDataSnippet::emitSnippetBody()
       cursor += TR::Compiler->om.sizeofReferenceAddress();
       }
 
-    // Cursor must be double word aligned by this point
-    // so that 64-bit single dynamic slot can use LPQ to concurrently load a quadword.
-    TR_ASSERT_FATAL( (!isSingleDynamic && (intptr_t)cursor % 8 == 0)
+   // Cursor must be double word aligned by this point
+   // so that 64-bit single dynamic slot can use LPQ to concurrently load a quadword.
+   TR_ASSERT_FATAL( (!isSingleDynamic && (intptr_t)cursor % 8 == 0)
                      || (comp->target().is64Bit() && isSingleDynamic && (intptr_t)cursor % 16 == 0),
                      "Interface Call Data Snippet Class Ptr is not double word aligned.");
 
-    bool updateField = false;
-     int32_t numInterfaceCallCacheSlots = getNumInterfaceCallCacheSlots();
-     TR::list<TR_OpaqueClassBlock*> * profiledClassesList = cg()->getPICsListForInterfaceSnippet(this);
-     if (profiledClassesList)
-        {
-        for (auto valuesIt = profiledClassesList->begin(); valuesIt != profiledClassesList->end(); ++valuesIt)
-           {
-           TR::SymbolReference *methodSymRef = callNode->getSymbolReference();
-           TR_ResolvedMethod * profiledMethod = methodSymRef->getOwningMethod(comp)->getResolvedInterfaceMethod(comp,
-                 (TR_OpaqueClassBlock *)(*valuesIt), methodSymRef->getCPIndex());
-           numInterfaceCallCacheSlots--;
-           updateField = true;
-           if (comp->target().is64Bit() && TR::Compiler->om.generateCompressedObjectHeaders())
-              *(uintptr_t *) cursor = (uintptr_t) (*valuesIt) << 32;
-           else
-              *(uintptr_t *) cursor = (uintptr_t) (*valuesIt);
+   bool updateField = false;
+   int32_t numInterfaceCallCacheSlots = getNumInterfaceCallCacheSlots();
+   TR::list<TR_OpaqueClassBlock*> * profiledClassesList = cg()->getPICsListForInterfaceSnippet(this);
+   if (profiledClassesList)
+      {
+      for (auto valuesIt = profiledClassesList->begin(); valuesIt != profiledClassesList->end(); ++valuesIt)
+         {
+         TR::SymbolReference *methodSymRef = callNode->getSymbolReference();
+         TR_ResolvedMethod * profiledMethod = methodSymRef->getOwningMethod(comp)->getResolvedInterfaceMethod(comp,
+               (TR_OpaqueClassBlock *)(*valuesIt), methodSymRef->getCPIndex());
+         numInterfaceCallCacheSlots--;
+         updateField = true;
+         if (comp->target().is64Bit() && TR::Compiler->om.generateCompressedObjectHeaders())
+            *(uintptr_t *) cursor = (uintptr_t) (*valuesIt) << 32;
+         else
+            *(uintptr_t *) cursor = (uintptr_t) (*valuesIt);
 
-           if (comp->getOption(TR_EnableHCR))
-              {
-              cg()->jitAddPicToPatchOnClassRedefinition(*valuesIt, (void *) cursor);
-              }
+         if (comp->getOption(TR_EnableHCR))
+            {
+            cg()->jitAddPicToPatchOnClassRedefinition(*valuesIt, (void *) cursor);
+            }
 
-           if (cg()->fe()->isUnloadAssumptionRequired((TR_OpaqueClassBlock *)(*valuesIt), comp->getCurrentMethod()))
-              {
-              cg()->jitAddPicToPatchOnClassUnload(*valuesIt, (void *) cursor);
-              }
+         if (cg()->fe()->isUnloadAssumptionRequired((TR_OpaqueClassBlock *)(*valuesIt), comp->getCurrentMethod()))
+            {
+            cg()->jitAddPicToPatchOnClassUnload(*valuesIt, (void *) cursor);
+            }
 
-           cursor += TR::Compiler->om.sizeofReferenceAddress();
+         cursor += TR::Compiler->om.sizeofReferenceAddress();
 
-           // Method Pointer
-           *(uintptr_t *) (cursor) = (uintptr_t)profiledMethod->startAddressForJittedMethod();
-           cursor += TR::Compiler->om.sizeofReferenceAddress();
-           }
+         // Method Pointer
+         *(uintptr_t *) (cursor) = (uintptr_t)profiledMethod->startAddressForJittedMethod();
+         cursor += TR::Compiler->om.sizeofReferenceAddress();
+         }
 
-        }
+      }
 
-     // Skip the top cache slots that are filled with IProfiler data by setting the cursorlastCachedSlot to point to the fist dynamic cache slot
-     if (updateField)
-        {
-        *(intptr_t *) (cursorlastCachedSlot) =  snippetStart + getFirstSlotOffset() + ((getNumInterfaceCallCacheSlots()-numInterfaceCallCacheSlots-1)*2 * TR::Compiler->om.sizeofReferenceAddress());
-        }
+   // Skip the top cache slots that are filled with IProfiler data by setting the cursorlastCachedSlot to point to the fist dynamic cache slot
+   if (updateField)
+      {
+      *(intptr_t *) (cursorlastCachedSlot) =  snippetStart + getFirstSlotOffset() + ((getNumInterfaceCallCacheSlots()-numInterfaceCallCacheSlots-1)*2 * TR::Compiler->om.sizeofReferenceAddress());
+      }
 
-     for (i = 0; i < numInterfaceCallCacheSlots; i++)
+   for (i = 0; i < numInterfaceCallCacheSlots; i++)
       {
       if (isUseCLFIandBRCL())
          {
