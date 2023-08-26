@@ -2168,7 +2168,7 @@ J9::Z::PrivateLinkage::buildVirtualDispatch(TR::Node * callNode, TR::RegisterDep
                ifcSnippet->getDataConstantSnippet()->setFirstCLFI(cursor);
 
                // BRCL
-               cursor = generateRILInstruction(cg(), TR::InstOpCode::BRCL, callNode, static_cast<uint32_t>(0x0), reinterpret_cast<void*>(0x0), cursor);
+               cursor = generateRILInstruction(cg(), TR::InstOpCode::BRCL, callNode, static_cast<uint32_t>(0x0), static_cast<uint32_t>(0x0), cursor);
 
                for(i = 1; i < numInterfaceCallCacheSlots; i++)
                   {
@@ -2176,7 +2176,7 @@ J9::Z::PrivateLinkage::buildVirtualDispatch(TR::Node * callNode, TR::RegisterDep
                   cursor = generateRILInstruction(cg(), TR::InstOpCode::CLFI, callNode, vftReg, 0x0, cursor); //compare against 0
 
                   // BRCL
-                  cursor = generateRILInstruction(cg(), TR::InstOpCode::BRCL, callNode, static_cast<uint32_t>(0x0), reinterpret_cast<void*>(0x0), cursor);
+                  cursor = generateRILInstruction(cg(), TR::InstOpCode::BRCL, callNode, static_cast<uint32_t>(0x0), static_cast<uint32_t>(0x0), cursor);
                   }
                }
             else

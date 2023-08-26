@@ -1427,12 +1427,19 @@ TR::J9S390InterfaceCallDataSnippet::emitSnippetBody()
    if (!isSingleDynamic)
       {
       // Flags
-      *(intptr_t *) (cursor) = 0;
+      *(intptr_t *) (cursor) = isUseCLFIandBRCL() ? 0x0001000000000000LL : 0;
       cursor += TR::Compiler->om.sizeofReferenceAddress();
 
       // lastCachedSlot
       cursorlastCachedSlot = cursor;
-      *(intptr_t *) (cursor) =  snippetStart + getFirstSlotOffset() - (2 * TR::Compiler->om.sizeofReferenceAddress());
+      if (isUseCLFIandBRCL())
+         {
+         *reinterpret_cast<intptr_t *>(cursor) = reinterpret_cast<intptr_t>(getFirstCLFI()->getBinaryEncoding() + 2) - 12;
+         }
+      else
+         {
+         *reinterpret_cast<intptr_t *>(cursor) = snippetStart + getFirstSlotOffset() - (2 * TR::Compiler->om.sizeofReferenceAddress());
+         }
       cg()->addExternalRelocation(
          TR::ExternalRelocation::create(
             cursor,
@@ -1446,7 +1453,14 @@ TR::J9S390InterfaceCallDataSnippet::emitSnippetBody()
       cursor += TR::Compiler->om.sizeofReferenceAddress();
 
       // firstSlot
-      *(intptr_t *) (cursor) = snippetStart + getFirstSlotOffset();
+      if (isUseCLFIandBRCL())
+         {
+         *reinterpret_cast<intptr_t *>(cursor) = reinterpret_cast<intptr_t>(getFirstCLFI()->getBinaryEncoding() + 2);
+         }
+      else
+         {
+         *reinterpret_cast<intptr_t *>(cursor) = snippetStart + getFirstSlotOffset();
+         }
       cg()->addExternalRelocation(
          TR::ExternalRelocation::create(
             cursor,
@@ -1459,7 +1473,14 @@ TR::J9S390InterfaceCallDataSnippet::emitSnippetBody()
       cursor += TR::Compiler->om.sizeofReferenceAddress();
 
       // lastSlot
-      *(intptr_t *) (cursor) =  snippetStart + getLastSlotOffset();
+      if (isUseCLFIandBRCL())
+         {
+         *reinterpret_cast<intptr_t *>(cursor) = reinterpret_cast<intptr_t>(getFirstCLFI()->getBinaryEncoding() + 12*(getNumInterfaceCallCacheSlots()-1) + 2);
+         }
+      else
+         {
+         *reinterpret_cast<intptr_t *>(cursor) = snippetStart + getLastSlotOffset();
+         }
       cg()->addExternalRelocation(
          TR::ExternalRelocation::create(
             cursor,
@@ -1490,28 +1511,68 @@ TR::J9S390InterfaceCallDataSnippet::emitSnippetBody()
                (TR_OpaqueClassBlock *)(*valuesIt), methodSymRef->getCPIndex());
          numInterfaceCallCacheSlots--;
          updateField = true;
-         if (comp->target().is64Bit() && TR::Compiler->om.generateCompressedObjectHeaders())
-            *(uintptr_t *) cursor = (uintptr_t) (*valuesIt) << 32;
+         void * picSite;
+
+         if (isUseCLFIandBRCL())
+            {
+            TR_ASSERT_FATAL(comp->target().is64Bit() && TR::Compiler->om.generateCompressedObjectHeaders(),
+                              "Generating patchable CLFI for interface call assumes compressed references.");
+            /*
+            *        ________ ____ ____ ______________________________
+            * CLFI  | 'C2'   | R1 |'F' |  immediate = class pointer   |
+            *       |________|____|____|______________________________|
+            *       0         8   12   16                            47
+            *        ________ ____ ____ ______________________________
+            * BRCL  | 'C0'   | R1 |'4' |  immediate = method pointer  |
+            *       |________|____|____|______________________________|
+            *       0         8   12   16                            47
+            */
+            int32_t *clfiImmAddr = reinterpret_cast<int32_t *>(getFirstCLFI()->getBinaryEncoding() + i*12 + 2);
+            *clfiImmAddr = static_cast<int32_t>(reinterpret_cast<uintptr_t>(*valuesIt) << 32);
+            picSite = static_cast<void *>(clfiImmAddr);
+            }
          else
-            *(uintptr_t *) cursor = (uintptr_t) (*valuesIt);
+            {
+            if (comp->target().is64Bit() && TR::Compiler->om.generateCompressedObjectHeaders())
+               *reinterpret_cast<uintptr_t *>(cursor) = reinterpret_cast<uintptr_t>(*valuesIt) << 32;
+            else
+               *reinterpret_cast<uintptr_t *>(cursor) = reinterpret_cast<uintptr_t>(*valuesIt);
+            picSite = static_cast<void *>(cursor);
+            }
+
 
          if (comp->getOption(TR_EnableHCR))
             {
-            cg()->jitAddPicToPatchOnClassRedefinition(*valuesIt, (void *) cursor);
+            cg()->jitAddPicToPatchOnClassRedefinition(*valuesIt, picSite);
             }
 
          if (cg()->fe()->isUnloadAssumptionRequired((TR_OpaqueClassBlock *)(*valuesIt), comp->getCurrentMethod()))
             {
-            cg()->jitAddPicToPatchOnClassUnload(*valuesIt, (void *) cursor);
+            cg()->jitAddPicToPatchOnClassUnload(*valuesIt, picSite);
             }
 
          cursor += TR::Compiler->om.sizeofReferenceAddress();
 
          // Method Pointer
-         *(uintptr_t *) (cursor) = (uintptr_t)profiledMethod->startAddressForJittedMethod();
+         if (isUseCLFIandBRCL())
+            {
+            intptr_t brclAddr = reinterpret_cast<intptr_t>(getFirstCLFI()->getBinaryEncoding() + i*12 + 6);
+            int32_t *brclImmAddr = reinterpret_cast<int32_t *>(brclAddr + 2);
+            intptr_t profiledMethodStart = reinterpret_cast<intptr_t>(profiledMethod->startAddressForJittedMethod());
+            intptr_t profiledMethodOffset = (brclAddr - profiledMethodStart) / 2;
+
+            TR_ASSERT_FATAL(abs(profiledMethodOffset) < 0x200000000UL,
+                              "Generating BRCL for interface call assumes that all jit-to-jit calls fall within 2G.");
+
+            *brclImmAddr = static_cast<int32_t>(profiledMethodOffset);
+            }
+         else
+            {
+            *reinterpret_cast<uintptr_t *>(cursor) = reinterpret_cast<uintptr_t>(profiledMethod->startAddressForJittedMethod());
+            }
+
          cursor += TR::Compiler->om.sizeofReferenceAddress();
          }
-
       }
 
    // Skip the top cache slots that are filled with IProfiler data by setting the cursorlastCachedSlot to point to the fist dynamic cache slot
@@ -1544,7 +1605,7 @@ TR::J9S390InterfaceCallDataSnippet::emitSnippetBody()
    if (isSingleDynamic)
       {
       // Flags
-      *(intptr_t *) (cursor) = 0;
+      *(intptr_t *) (cursor) = isUseCLFIandBRCL() ? 0x0001000000000000LL : 0;
       cursor += TR::Compiler->om.sizeofReferenceAddress();
       }
 

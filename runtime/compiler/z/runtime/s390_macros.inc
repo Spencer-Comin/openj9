@@ -1,16 +1,16 @@
 ZZ Copyright IBM Corp. and others 2000
 ZZ
-ZZ This program and the accompanying materials are made 
-ZZ available under the terms of the Eclipse Public License 2.0 
-ZZ which accompanies this distribution and is available at 
-ZZ https://www.eclipse.org/legal/epl-2.0/ or the Apache License, 
-ZZ Version 2.0 which accompanies this distribution and is available 
+ZZ This program and the accompanying materials are made
+ZZ available under the terms of the Eclipse Public License 2.0
+ZZ which accompanies this distribution and is available at
+ZZ https://www.eclipse.org/legal/epl-2.0/ or the Apache License,
+ZZ Version 2.0 which accompanies this distribution and is available
 ZZ at https://www.apache.org/licenses/LICENSE-2.0.
 ZZ
 ZZ This Source Code may also be made available under the following
 ZZ Secondary Licenses when the conditions for such availability set
 ZZ forth in the Eclipse Public License, v. 2.0 are satisfied: GNU
-ZZ General Public License, version 2 with the GNU Classpath 
+ZZ General Public License, version 2 with the GNU Classpath
 ZZ Exception [1] and GNU General Public License, version 2 with the
 ZZ OpenJDK Assembly Exception [2].
 ZZ
@@ -104,6 +104,8 @@ SETVAL(eq_thunk_inInterfaceSnippet,40)
 
 ZZ For Zero or Multi slot case
 SETVAL(eq_flag_inInterfaceSnippet,48)
+SETVAL(eq_resolvedFlag_inInterfaceSnippet,48)
+SETVAL(eq_CLFIBRCLFlag_inInterfaceSnippet,49)
 
 ZZ For Multi slot case
 SETVAL(eq_lastCachedSlotField_inInterfaceSnippet,56)
@@ -131,6 +133,8 @@ SETVAL(eq_thunk_inInterfaceSnippet,20)
 
 ZZ For Zero or Multi slot case
 SETVAL(eq_flag_inInterfaceSnippet,24)
+SETVAL(eq_resolvedFlag_inInterfaceSnippet,24)
+SETVAL(eq_CLFIBRCLFlag_inInterfaceSnippet,25)
 
 ZZ For Multi slot case
 SETVAL(eq_lastCachedSlotField_inInterfaceSnippet,28)

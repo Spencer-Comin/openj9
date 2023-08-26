@@ -446,10 +446,10 @@ ZZ   Already compiled
 ZZ   Go through j2iTransition
 
     L_GPR   r14,eq_codeRA_inSnippet(rSB)  # Load code cache RA
-    
+
 LOAD_ADDR_FROM_TOC(rEP,TR_j2iTransition)
     BR      rEP
-    
+
 LABEL(Ljitted)
 
 ifdef({MCC_SUPPORTED},{dnl
@@ -1273,7 +1273,7 @@ ZZ  Check if it's a previously resolved private target
     JNZ     ifCHMLTypeCheckIFCPrivate
 
 LABEL(ifCH0callResolve)
-    TM      eq_flag_inInterfaceSnippet(r14),1 # method is resolved?
+    TM      eq_resolvedFlag_inInterfaceSnippet(r14),1 # method is resolved?
     JNZ     LcontinueLookup
 
 ZZ    # Load address of [idx:CP] pair
@@ -1286,7 +1286,7 @@ LOAD_ADDR_FROM_TOC(r14,TR_S390jitResolveInterfaceMethod)
 
     LR_GPR  r14,r0
 ZZ                                # interface class and index in TLS
-    MVI     eq_flag_inInterfaceSnippet(r14),1
+    MVI     eq_resolvedFlag_inInterfaceSnippet(r14),1
 
 ZZ  resolve helper fills the class slot and method slot
 ZZ  Check PIC slot to see if the target is private interface method
@@ -1635,7 +1635,7 @@ ZZ  Check if it's a previously resolved private target
     JNZ     ifCHMLTypeCheckIFCPrivate
 
 LABEL(ifCMHLcallResolve)
-    TM      eq_flag_inInterfaceSnippet(r14),1 # method is resolved?
+    TM      eq_resolvedFlag_inInterfaceSnippet(r14),1 # method is resolved?
     JNZ     ifCHMLcontinueLookup
 
 ZZ    # Load address of [idx:CP] pair
@@ -1648,7 +1648,7 @@ LOAD_ADDR_FROM_TOC(r14,TR_S390jitResolveInterfaceMethod)
 
     LR_GPR  r14,r0
 ZZ                           # interface class and index in TLS
-    MVI     eq_flag_inInterfaceSnippet(r14),1
+    MVI     eq_resolvedFlag_inInterfaceSnippet(r14),1
 
 ZZ  resolve helper fills the class slot and method slot
 ZZ  Check PIC slot to see if the target is private interface method
@@ -1734,11 +1734,25 @@ ZZ  so just dispatch
 ZZ Try to atomically update lastCachedSlot
 ZZ value to be stored(r1) beginning with firstSlot
     L_GPR   r0,eq_firstSlotField_inInterfaceSnippet(r14)
+    TM      eq_CLFIBRCLFlag_inInterfaceSnippet(r14),1 # method uses inline CLFI BRCL for cache?
+    JZ      ifCHMCacheDecrement
+
+    AHI_GPR r0,-12
+    J       ifCHMCSLoopBegin
+
+LABEL(ifCHMCacheDecrement)
     AHI_GPR r0,-2*PTR_SIZE
 LABEL(ifCHMCSLoopBegin)
     LR_GPR  r1,r0
+    TM      eq_CLFIBRCLFlag_inInterfaceSnippet(r14),1 # method uses inline CLFI BRCL for cache?
+    JZ      ifCHMCacheIncrement
+
+    AHI_GPR r1,12           ZZ increment by 12 to get to next CLFI immediate
+    J       ifCHMCheckIfLast
+LABEL(ifCHMCacheIncrement)
     AHI_GPR r1,2*PTR_SIZE    ZZ  r1 will now point to next empty slot
 
+LABEL(ifCHMCheckIfLast)
 ZZ  if lastCachedSlot == lastSlot, no more slots left to cache,
 ZZ  so just dispatch
     C_GPR   r0,eq_lastSlotField_inInterfaceSnippet(r14)
@@ -1779,6 +1793,21 @@ ZZ slot we contended for last time
     J       ifCHMCSLoopBegin
 
 LABEL(ifCHMUpdateCacheSlot)
+    TM      eq_CLFIBRCLFlag_inInterfaceSnippet(r14),1 # method uses inline CLFI BRCL for cache?
+    JZ      ifCHMUpdateSnippetCacheSlot
+
+ZZ store class pointer in the CLFI immediate
+    ST      r2,0(,r1)
+
+ZZ calculate offset from BRCL to method EP
+    LA      r2,4(,r1)
+    SR_GPR  r2,r3
+    SRLG    r2,r2,1          # divide the offset by 2
+    ST      r2,6(,r1)
+
+    J       ifCHMAddPicToPatchOnClassUnload
+
+LABEL(ifCHMUpdateSnippetCacheSlot)
 ZZ store class pointer and method EP in the current empty slot
     ST_GPR  r3,PTR_SIZE(,r1)
 IfCompressedElse({dnl
@@ -1787,6 +1816,7 @@ IfCompressedElse({dnl
     ST_GPR  r2,0(,r1)
 })dnl
 
+LABEL(ifCHMAddPicToPatchOnClassUnload)
 ZZ Clobberable volatile regs r1,r2,r3,r0
 ZZ  Load pic address as second address
     LR_GPR  CARG2,r1
