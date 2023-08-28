@@ -1543,12 +1543,18 @@ TR::J9S390InterfaceCallDataSnippet::emitSnippetBody()
 
          if (comp->getOption(TR_EnableHCR))
             {
-            cg()->jitAddPicToPatchOnClassRedefinition(*valuesIt, picSite);
+            if (isUseCLFIandBRCL())
+               cg()->jitAdd32BitPicToPatchOnClassRedefinition(*valuesIt, picSite);
+            else
+               cg()->jitAddPicToPatchOnClassRedefinition(*valuesIt, picSite);
             }
 
          if (cg()->fe()->isUnloadAssumptionRequired((TR_OpaqueClassBlock *)(*valuesIt), comp->getCurrentMethod()))
             {
-            cg()->jitAddPicToPatchOnClassUnload(*valuesIt, picSite);
+            if (isUseCLFIandBRCL())
+               cg()->jitAdd32BitPicToPatchOnClassUnload(*valuesIt, picSite);
+            else
+               cg()->jitAddPicToPatchOnClassUnload(*valuesIt, picSite);
             }
 
          cursor += TR::Compiler->om.sizeofReferenceAddress();

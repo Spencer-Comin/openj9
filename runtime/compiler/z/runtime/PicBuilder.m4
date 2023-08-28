@@ -1869,7 +1869,15 @@ RestoreSSP
 
 ifdef({J9ZOS390},{dnl
 
+    TM      eq_CLFIBRCLFlag_inInterfaceSnippet(r14),1 # method uses inline CLFI BRCL for cache?
+    JZ      ifCHMLoadPicPatcher
+
+LOAD_ADDR_FROM_TOC(r6,TR_jitAdd32BitPicToPatchOnClassUnload)
+    J       ifCHMCallPicPatcher
+
+LABEL(ifCHMLoadPicPatcher)
 LOAD_ADDR_FROM_TOC(r6,TR_jitAddPicToPatchOnClassUnload)
+LABEL(ifCHMCallPicPatcher)
 
 ifdef({TR_HOST_64BIT},{dnl
 
@@ -1892,7 +1900,16 @@ SaveSSP
 
 
 ZZ zLinux case
+    TM      eq_CLFIBRCLFlag_inInterfaceSnippet(r14),1 # method uses inline CLFI BRCL for cache?
+    JZ      ifCHMLoadPicPatcher
+
+LOAD_ADDR_FROM_TOC(r14,TR_jitAdd32BitPicToPatchOnClassUnload)
+    J       ifCHMCallPicPatcher
+
+LABEL(ifCHMLoadPicPatcher)
 LOAD_ADDR_FROM_TOC(r14,TR_jitAddPicToPatchOnClassUnload)
+LABEL(ifCHMCallPicPatcher)
+
     BASR    r14,r14
 })dnl
 

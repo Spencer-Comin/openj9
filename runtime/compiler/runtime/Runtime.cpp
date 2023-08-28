@@ -1717,6 +1717,7 @@ void initializeCodeRuntimeHelperTable(J9JITConfig *jitConfig, char isSMP)
    SET(TR_S390jitRetranslateMethod,                   (void *) jitRetranslateMethod,      TR_Helper);
    SET(TR_S390revertToInterpreter,                    (void *) revertMethodToInterpreted, TR_Helper);
    SET_CONST(TR_jitAddPicToPatchOnClassUnload,        (void *) jitAddPicToPatchOnClassUnload);
+   SET_CONST(TR_jitAdd32BitPicToPatchOnClassUnload,   (void *) jitAdd32BitPicToPatchOnClassUnload);
 
    initS390WriteOnceHelpers(jitConfig, TR_S390arrayCopyHelper, TR_S390arraySetZeroHelper,TR_S390arraySetGeneralHelper,TR_S390arrayCmpHelper);
 
