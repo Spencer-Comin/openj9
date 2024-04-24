@@ -1013,16 +1013,11 @@ J9::Z::TreeEvaluator::inlineVectorizedStringIndexOf(TR::Node* node, TR::CodeGene
    TR::Register* patternLenReg = cg->gprClobberEvaluate(node->getChild(firstCallArgIdx+3));
    TR::Register* stringIndexReg = cg->gprClobberEvaluate(node->getChild(firstCallArgIdx+4));
 
-   if (stringLengthNode->getMinTrailingZeros() > 0)
-      if (stringLengthNode->getOpCode().isLoadConst())
-         TR::DebugCounter::incStaticDebugCounter(comp,
-                              TR::DebugCounter::debugCounterName(comp, "minTrailingZeros/nonzero/const/inlineVectorizedStringIndexOf/%d/%s", stringLengthNode->getMinTrailingZeros(), comp->signature()));
-      else
-         TR::DebugCounter::incStaticDebugCounter(comp,
-                              TR::DebugCounter::debugCounterName(comp, "minTrailingZeros/nonzero/nonconst/inlineVectorizedStringIndexOf/%d/%s", stringLengthNode->getMinTrailingZeros(), comp->signature()));
-   else
-      TR::DebugCounter::incStaticDebugCounter(comp,
-                           TR::DebugCounter::debugCounterName(comp, "minTrailingZeros/zero/inlineVectorizedStringIndexOf/%s", comp->signature()));
+   TR::DebugCounter::incStaticDebugCounter(comp,
+      TR::DebugCounter::debugCounterName(comp, "minTrailingZeros/%s/%d/inlineVectorizedStringIndexOf/(%s)",
+         stringLengthNode->getOpCode().isLoadConst() ? "const" : "nonconst",
+         stringLengthNode->getMinTrailingZeros(),
+         comp->signature()));
 
    // Registers
    TR::Register* matchIndexReg    = cg->allocateRegister();
@@ -1705,16 +1700,11 @@ J9::Z::TreeEvaluator::inlineIntrinsicIndexOf(TR::Node * node, TR::CodeGenerator 
    TR::Register* length = cg->gprClobberEvaluate(lengthNode);
 
    auto comp = cg->comp();
-   if (lengthNode->getMinTrailingZeros() > 0)
-      if (lengthNode->getOpCode().isLoadConst())
-         TR::DebugCounter::incStaticDebugCounter(comp,
-                              TR::DebugCounter::debugCounterName(comp, "minTrailingZeros/nonzero/const/inlineIntrinsicIndexOf/%d/%s", lengthNode->getMinTrailingZeros(), comp->signature()));
-      else
-         TR::DebugCounter::incStaticDebugCounter(comp,
-                              TR::DebugCounter::debugCounterName(comp, "minTrailingZeros/nonzero/nonconst/inlineIntrinsicIndexOf/%d/%s", lengthNode->getMinTrailingZeros(), comp->signature()));
-   else
-      TR::DebugCounter::incStaticDebugCounter(comp,
-                           TR::DebugCounter::debugCounterName(comp, "minTrailingZeros/zero/inlineIntrinsicIndexOf/%s", comp->signature()));
+   TR::DebugCounter::incStaticDebugCounter(comp,
+      TR::DebugCounter::debugCounterName(comp, "minTrailingZeros/%s/%d/inlineIntrinsicIndexOf/(%s)",
+         lengthNode->getOpCode().isLoadConst() ? "const" : "nonconst",
+         lengthNode->getMinTrailingZeros(),
+         comp->signature()));
 
    const int32_t sizeOfVector = cg->machine()->getVRFSize();
 
@@ -1863,16 +1853,11 @@ J9::Z::TreeEvaluator::inlineUTF16BEEncode(TR::Node *node, TR::CodeGenerator *cg)
    {
    TR::Compilation* comp = cg->comp();
    auto lengthNode = node->getChild(2);
-   if (lengthNode->getMinTrailingZeros() > 0)
-      if (lengthNode->getOpCode().isLoadConst())
-         TR::DebugCounter::incStaticDebugCounter(comp,
-                              TR::DebugCounter::debugCounterName(comp, "minTrailingZeros/nonzero/const/inlineIntrinsicIndexOf/%d/%s", lengthNode->getMinTrailingZeros(), comp->signature()));
-      else
-         TR::DebugCounter::incStaticDebugCounter(comp,
-                              TR::DebugCounter::debugCounterName(comp, "minTrailingZeros/nonzero/nonconst/inlineIntrinsicIndexOf/%d/%s", lengthNode->getMinTrailingZeros(), comp->signature()));
-   else
-      TR::DebugCounter::incStaticDebugCounter(comp,
-                           TR::DebugCounter::debugCounterName(comp, "minTrailingZeros/zero/inlineIntrinsicIndexOf/%s", comp->signature()));
+   TR::DebugCounter::incStaticDebugCounter(comp,
+      TR::DebugCounter::debugCounterName(comp, "minTrailingZeros/%s/%d/inlineUTF16BEEncode/(%s)",
+         lengthNode->getOpCode().isLoadConst() ? "const" : "nonconst",
+         lengthNode->getMinTrailingZeros(),
+         comp->signature()));
 
    // Create the necessary registers
    TR::Register* output    = cg->gprClobberEvaluate(node->getChild(1));
@@ -2101,16 +2086,11 @@ J9::Z::TreeEvaluator::inlineCRC32CUpdateBytes(TR::Node *node, TR::CodeGenerator 
    {
    auto lengthNode = node->getChild(3);
    auto comp = cg->comp();
-   if (lengthNode->getMinTrailingZeros() > 0)
-      if (lengthNode->getOpCode().isLoadConst())
-         TR::DebugCounter::incStaticDebugCounter(comp,
-                              TR::DebugCounter::debugCounterName(comp, "minTrailingZeros/nonzero/const/inlineCRC32CUpdateBytes/%d/%s", lengthNode->getMinTrailingZeros(), comp->signature()));
-      else
-         TR::DebugCounter::incStaticDebugCounter(comp,
-                              TR::DebugCounter::debugCounterName(comp, "minTrailingZeros/nonzero/nonconst/inlineCRC32CUpdateBytes/%d/%s", lengthNode->getMinTrailingZeros(), comp->signature()));
-   else
-      TR::DebugCounter::incStaticDebugCounter(comp,
-                           TR::DebugCounter::debugCounterName(comp, "minTrailingZeros/zero/inlineCRC32CUpdateBytes/%s", comp->signature()));
+   TR::DebugCounter::incStaticDebugCounter(comp,
+      TR::DebugCounter::debugCounterName(comp, "minTrailingZeros/%s/%d/inlineCRC32CUpdateBytes/(%s)",
+         lengthNode->getOpCode().isLoadConst() ? "const" : "nonconst",
+         lengthNode->getMinTrailingZeros(),
+         comp->signature()));
 
    // Get call parameters
    TR::Register* crc = cg->gprClobberEvaluate(node->getChild(0));
@@ -2501,16 +2481,11 @@ J9::Z::TreeEvaluator::inlineUTF16BEEncodeSIMD(TR::Node *node, TR::CodeGenerator 
 
    TR::Node* inputLenNode = node->getChild(2);
 
-   if (inputLenNode->getMinTrailingZeros() > 0)
-      if (inputLenNode->getOpCode().isLoadConst())
-         TR::DebugCounter::incStaticDebugCounter(comp,
-                              TR::DebugCounter::debugCounterName(comp, "minTrailingZeros/nonzero/const/inlineUTF16BEEncodeSIMD/%d/%s", inputLenNode->getMinTrailingZeros(), comp->signature()));
-      else
-         TR::DebugCounter::incStaticDebugCounter(comp,
-                              TR::DebugCounter::debugCounterName(comp, "minTrailingZeros/nonzero/nonconst/inlineUTF16BEEncodeSIMD/%d/%s", inputLenNode->getMinTrailingZeros(), comp->signature()));
-   else
-      TR::DebugCounter::incStaticDebugCounter(comp,
-                           TR::DebugCounter::debugCounterName(comp, "minTrailingZeros/zero/inlineUTF16BEEncodeSIMD/%s", comp->signature()));
+   TR::DebugCounter::incStaticDebugCounter(comp,
+      TR::DebugCounter::debugCounterName(comp, "minTrailingZeros/%s/%d/inlineUTF16BEEncodeSIMD/(%s)",
+         inputLenNode->getOpCode().isLoadConst() ? "const" : "nonconst",
+         inputLenNode->getMinTrailingZeros(),
+         comp->signature()));
 
    // Optimize the constant length case
    bool isLenConstant = inputLenNode->getOpCode().isLoadConst() && performTransformation(comp, "O^O [%p] Reduce input length to constant.\n", inputLenNode);
@@ -2715,16 +2690,11 @@ J9::Z::TreeEvaluator::inlineStringHashCode(TR::Node* node, TR::CodeGenerator* cg
    TR::Node* nodeIndex = node->getChild(1);
    TR::Node* nodeCount = node->getChild(2);
 
-   if (nodeCount->getMinTrailingZeros() > 0)
-      if (nodeCount->getOpCode().isLoadConst())
-         TR::DebugCounter::incStaticDebugCounter(comp,
-                              TR::DebugCounter::debugCounterName(comp, "minTrailingZeros/nonzero/const/inlineStringHashCode/%d/%s", nodeCount->getMinTrailingZeros(), comp->signature()));
-      else
-         TR::DebugCounter::incStaticDebugCounter(comp,
-                              TR::DebugCounter::debugCounterName(comp, "minTrailingZeros/nonzero/nonconst/inlineStringHashCode/%d/%s", nodeCount->getMinTrailingZeros(), comp->signature()));
-   else
-      TR::DebugCounter::incStaticDebugCounter(comp,
-                           TR::DebugCounter::debugCounterName(comp, "minTrailingZeros/zero/inlineStringHashCode/%s", comp->signature()));
+   TR::DebugCounter::incStaticDebugCounter(comp,
+      TR::DebugCounter::debugCounterName(comp, "minTrailingZeros/%s/%d/inlineStringHashCode/(%s)",
+         nodeCount->getOpCode().isLoadConst() ? "const" : "nonconst",
+         nodeCount->getMinTrailingZeros(),
+         comp->signature()));
 
    // Create the necessary labels
    TR::LabelSymbol * cFlowRegionStart  = generateLabelSymbol(cg);
