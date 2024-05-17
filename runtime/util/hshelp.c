@@ -1793,7 +1793,7 @@ fixMemberNames(J9VMThread *currentThread, j9object_t *memberNamesToFix)
 			UDATA offset = fieldID->offset;
 
 			if (J9_ARE_ANY_BITS_SET(romField->modifiers, J9AccStatic)) {
-				offset |= J9_SUN_STATIC_FIELD_OFFSET_TAG;
+				offset = J9VM_STATIC_FIELD_OFFSET(currentThread, fieldID);
 				if (J9_ARE_ANY_BITS_SET(romField->modifiers, J9AccFinal)) {
 					offset |= J9_SUN_FINAL_FIELD_OFFSET_TAG;
 				}
