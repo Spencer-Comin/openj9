@@ -199,10 +199,6 @@ private:
 				J9Class *fieldClass = J9VM_J9CLASS_FROM_HEAPCLASS(currentThread, object);
 				void *valueAddress = getStaticFieldAddressFromOffset(currentThread, fieldClass, offset);
 				{
-					if (isSingleOrMore) {
-						__asm__("int3");
-					}
-
 					value = (I_32)objectAccessBarrier->inlineStaticReadU32(currentThread, fieldClass, (U_32*)valueAddress, isVolatile);
 				}
 			} else {
@@ -275,9 +271,6 @@ private:
 					VM_VMHelpers::reportFinalFieldModified(currentThread, fieldClass);
 				}
 				void *valueAddress = getStaticFieldAddressFromOffset(currentThread, fieldClass, offset);
-				if (isSingleOrMore) {
-					__asm__("int3");
-				}
 				objectAccessBarrier->inlineStaticStoreU32(currentThread, fieldClass, (U_32*)valueAddress, (U_32)value, isVolatile);
 			} else {
 				/* Instance field */
@@ -311,7 +304,6 @@ private:
 				J9Class *fieldClass = J9VM_J9CLASS_FROM_HEAPCLASS(currentThread, object);
 				void *valueAddress = getStaticFieldAddressFromOffset(currentThread, fieldClass, offset);
 				{
-					__asm__("int3");
 					value = objectAccessBarrier->inlineStaticReadU64(currentThread, fieldClass, (U_64*)valueAddress, isVolatile);
 				}
 			} else {
@@ -348,7 +340,6 @@ private:
 					VM_VMHelpers::reportFinalFieldModified(currentThread, fieldClass);
 				}
 				void *valueAddress = getStaticFieldAddressFromOffset(currentThread, fieldClass, offset);
-				__asm__("int3");
 				objectAccessBarrier->inlineStaticStoreU64(currentThread, fieldClass, (U_64*)valueAddress, (U_64)value, isVolatile);
 			} else {
 				/* Instance field */
