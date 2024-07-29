@@ -7961,6 +7961,7 @@ CISCTransform2PtrArraySet(TR_CISCTransformer *trans)
       }
 
    // all good..  now actual transformations
+   if (trace) traceMsg(comp, "Successful CISCTransform2PtrArraySet\n");
    auto startPtr = TR::Node::createWithSymRef(TR::aload, 0, astoreNode->getSymbolReference());
    TR::Node *length, *arrayset;
    bool use64bit = comp->target().is64Bit();
@@ -8385,6 +8386,7 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
             elementSizeNode);
          }
 
+      traceMsg(comp, "Successful CISCTransform2ArraySet\n");
       TR::Node * arrayset = TR::Node::create(TR::arrayset, 3, outputNode, valueNode, lengthByteNode);
       arrayset->setSymbolReference(comp->getSymRefTab()->findOrCreateArraySetSymbol());
 
@@ -8892,6 +8894,7 @@ CISCTransform2MixedArraySet(TR_CISCTransformer *trans)
 
       lengthNode = createI2LIfNecessary(comp, trans->isGenerateI2L(), lengthNode);
 
+      traceMsg(comp, "Successful CISCTransform2MixedArraySet\n");
       TR::Node * arrayset = TR::Node::create(TR::arrayset, 3, outputNode, valueNode, lengthNode);
       arrayset->setSymbolReference(comp->getSymRefTab()->findOrCreateArraySetSymbol());
 
