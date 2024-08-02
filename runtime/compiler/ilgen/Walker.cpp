@@ -5406,6 +5406,7 @@ TR_J9ByteCodeIlGenerator::loadFlattenableInstance(int32_t cpIndex)
 void
 TR_J9ByteCodeIlGenerator::loadStatic(int32_t cpIndex)
    {
+   TR::DebugCounter::prependDebugCounter(comp(), "staticfield/ilgen/getstatic", _block->getExit());
    if (_generateReadBarriersForFieldWatch && comp()->compileRelocatableCode())
       comp()->failCompilation<J9::AOTNoSupportForAOTFailure>("NO support for AOT in field watch");
 
@@ -7059,6 +7060,7 @@ TR_J9ByteCodeIlGenerator::storeFlattenableInstance(int32_t cpIndex)
 void
 TR_J9ByteCodeIlGenerator::storeStatic(int32_t cpIndex)
    {
+   TR::DebugCounter::prependDebugCounter(comp(), "staticfield/ilgen/putstatic", _block->getExit());
    if (_generateWriteBarriersForFieldWatch && comp()->compileRelocatableCode())
       comp()->failCompilation<J9::AOTNoSupportForAOTFailure>("NO support for AOT in field watch");
 

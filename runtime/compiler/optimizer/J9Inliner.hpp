@@ -329,7 +329,7 @@ class TR_J9InlinerPolicy : public OMR_InlinerPolicy
                                   TR::TreeTop* directAccessTreeTop, TR::TreeTop* arraydirectAccessTreeTop,
                                   TR::TreeTop* indirectAccessTreeTop, TR::TreeTop* directAccessWithConversionTreeTop,
                                   bool needNullCheck, bool isUnsafeGet, bool conversionNeeded,
-                                  bool arrayBlockNeeded, bool typeTestsNeeded, TR::Node* orderedCallNode);
+                                  bool arrayBlockNeeded, bool typeTestsNeeded, TR::Node* orderedCallNode, const char *methodName);
       virtual bool callMustBeInlined(TR_CallTarget *calltarget);
       virtual bool callMustBeInlinedInCold(TR_ResolvedMethod *method);
       bool mustBeInlinedEvenInDebug(TR_ResolvedMethod * calleeMethod, TR::TreeTop *callNodeTreeTop);

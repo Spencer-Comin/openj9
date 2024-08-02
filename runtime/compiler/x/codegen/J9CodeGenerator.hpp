@@ -107,6 +107,8 @@ public:
    // See J9::CodeGenerator::guaranteesResolvedVirtualDispatchForSVM
    bool guaranteesResolvedVirtualDispatchForSVM() { return true; }
 
+   void lowerTreesPostChildrenVisit(TR::Node * parent, TR::TreeTop * treeTop, vcount_t visitCount);
+
 private:
    TR::SymbolReference *_nanoTimeTemp;
    };

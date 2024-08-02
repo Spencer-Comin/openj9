@@ -516,3 +516,24 @@ J9::X86::CodeGenerator::supportsNonHelper(TR::SymbolReferenceTable::CommonNonhel
 
    return J9::CodeGenerator::supportsNonHelper(symbol);
    }
+
+void
+J9::X86::CodeGenerator::lowerTreesPostChildrenVisit(TR::Node * parent, TR::TreeTop * treeTop, vcount_t visitCount)
+   {
+   if (!parent->getOpCode().isLoadVarDirect() && !parent->getOpCode().isStoreDirect())
+      return;
+
+   TR::SymbolReference *symRef = parent->getSymbolReference();
+   if (symRef->isUnresolved())
+      return;
+
+   TR::Symbol *sym = symRef->getSymbol();
+   if (!sym->isStaticField())
+      return;
+
+   if (symRef->getCPIndex() < 0)
+      return;
+
+   const char *dbgcntName = TR::DebugCounter::debugCounterName(comp(), "staticfield/cg/%s", parent->getOpCode().getName());
+   TR::DebugCounter::prependDebugCounter(comp(), dbgcntName, treeTop);
+   }

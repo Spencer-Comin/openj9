@@ -855,7 +855,8 @@ TR_J9InlinerPolicy::genCodeForUnsafeGetPut(TR::Node* unsafeAddress,
                                        bool needNullCheck, bool isUnsafeGet,
                                        bool conversionNeeded,
                                        bool arrayBlockNeeded, bool typeTestsNeeded,
-                                       TR::Node* orderedCallNode = NULL)
+                                       TR::Node* orderedCallNode,
+                                       const char *methodName)
    {
    TR::CFG *cfg = comp()->getFlowGraph();
    TR_OpaqueClassBlock *javaLangClass = comp()->getClassClassPointer(/* isVettedForAOT = */ true);
@@ -1035,6 +1036,8 @@ TR_J9InlinerPolicy::genCodeForUnsafeGetPut(TR::Node* unsafeAddress,
       indirectAccessBlock = TR::Block::createEmptyBlock(lowTagCmpTree->getNode(), comp(),
                                                         directAccessBlock->getFrequency());
       indirectAccessBlock->append(indirectAccessTreeTop);
+      const char *dbgcntName = TR::DebugCounter::debugCounterName(comp(), "staticfield/inliner/%s", methodName);
+      TR::DebugCounter::prependDebugCounter(comp(), dbgcntName, indirectAccessTreeTop);
       indirectAccessBlock->append(
             TR::TreeTop::create(comp(),
                                 TR::Node::create(indirectAccessTreeTop->getNode(),
@@ -1627,7 +1630,7 @@ TR_J9InlinerPolicy::createUnsafePutWithOffset(TR::ResolvedMethodSymbol *calleeSy
                           indirectAccessTreeTop, directAccessWithConversionTreeTop,
                           needNullCheck, false, conversionNeeded,
                           arrayBlockNeeded, typeTestsNeeded,
-                          orderedCallNode);
+                          orderedCallNode, calleeSymbol->getName());
 
 
    // Test for static final field
@@ -2161,7 +2164,7 @@ TR_J9InlinerPolicy::createUnsafeGetWithOffset(TR::ResolvedMethodSymbol *calleeSy
                           directAccessTreeTop, arrayDirectAccessTreeTop,
                           indirectAccessTreeTop, directAccessWithConversionTreeTop,
                           needNullCheck, false, conversionNeeded,
-                          arrayBlockNeeded, typeTestsNeeded);
+                          arrayBlockNeeded, typeTestsNeeded, NULL, calleeSymbol->getName());
 
    for (int32_t j=0; j<unsafeCall->getNumChildren(); j++)
       unsafeCall->getChild(j)->recursivelyDecReferenceCount();
