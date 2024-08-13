@@ -840,9 +840,11 @@ int32_t TR_UnsafeFastPath::perform()
 
             // Anchor children of the call node to preserve their values
             anchorAllChildren(node, tt);
+            const char *dbgcntName = TR::DebugCounter::debugCounterName(comp(), "unsafecall/UnsafeFastPath/%s", symbol->getName());
+            TR::DebugCounter::prependDebugCounter(comp(), dbgcntName, tt);
             if (isStatic)
                {
-               const char *dbgcntName = TR::DebugCounter::debugCounterName(comp(), "staticfield/UnsafeFastPath/%s", symbol->getName());
+               dbgcntName = TR::DebugCounter::debugCounterName(comp(), "staticfield/UnsafeFastPath/%s", symbol->getName());
                TR::DebugCounter::prependDebugCounter(comp(), dbgcntName, tt);
                }
 

@@ -860,6 +860,8 @@ TR_J9InlinerPolicy::genCodeForUnsafeGetPut(TR::Node* unsafeAddress,
    {
    TR::CFG *cfg = comp()->getFlowGraph();
    TR_OpaqueClassBlock *javaLangClass = comp()->getClassClassPointer(/* isVettedForAOT = */ true);
+   const char *dbgcntName = TR::DebugCounter::debugCounterName(comp(), "unsafecall/inliner/%s", methodName);
+   TR::DebugCounter::prependDebugCounter(comp(), dbgcntName, indirectAccessTreeTop);
 
    // There are 6 possible cases determining which checks and blocks should be added to the generated IL trees:
    // 1.) typeTestsNeeded && arrayBlockNeeded
