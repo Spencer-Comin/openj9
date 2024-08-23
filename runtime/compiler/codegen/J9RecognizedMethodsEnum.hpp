@@ -444,6 +444,16 @@
    sun_misc_Unsafe_putDoubleOrdered_jlObjectJD_V,
    sun_misc_Unsafe_putObjectOrdered_jlObjectJjlObject_V,
 
+   jdk_internal_misc_Unsafe_getBooleanAcquire_jlObjectJ_Z,
+   jdk_internal_misc_Unsafe_getByteAcquire_jlObjectJ_B,
+   jdk_internal_misc_Unsafe_getCharAcquire_jlObjectJ_C,
+   jdk_internal_misc_Unsafe_getShortAcquire_jlObjectJ_S,
+   jdk_internal_misc_Unsafe_getIntAcquire_jlObjectJ_I,
+   jdk_internal_misc_Unsafe_getLongAcquire_jlObjectJ_J,
+   jdk_internal_misc_Unsafe_getFloatAcquire_jlObjectJ_F,
+   jdk_internal_misc_Unsafe_getDoubleAcquire_jlObjectJ_D,
+   jdk_internal_misc_Unsafe_getObjectAcquire_jlObjectJ_jlObject,
+
    sun_misc_Unsafe_monitorEnter_jlObject_V,
    sun_misc_Unsafe_monitorExit_jlObject_V,
    sun_misc_Unsafe_tryMonitorEnter_jlObject_Z,

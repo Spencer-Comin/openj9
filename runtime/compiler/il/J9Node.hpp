@@ -299,8 +299,8 @@ public:
 
    // Flags used by call nodes
    bool isUnsafePutOrderedCall();
-   bool isDontInlinePutOrderedCall();
-   void setDontInlinePutOrderedCall(TR::Compilation *comp);
+   bool isDontInlineOrderedCall();
+   void setDontInlineOrderedCall(TR::Compilation *comp);
    bool chkDontInlineUnsafePutOrderedCall();
 
    /**
@@ -457,7 +457,7 @@ protected:
       spineCHKWithArrayElementChild         = 0x00004000,
 
       // Flags used by call nodes
-      dontInlineUnsafePutOrderedCall        = 0x00000800, ///< unsafe putOrdered calls
+      dontInlineUnsafeOrderedCall           = 0x00000800, ///< unsafe putOrdered, putRelease, and getAcquire calls
       processedByCallCloneConstrain         = 0x00100000,
       unsafeGetPutOnNonArray                = 0x00200000,
       DAAVariableSlowCall                   = 0x00400000, ///< Used to avoid Variable precision DAA optimization

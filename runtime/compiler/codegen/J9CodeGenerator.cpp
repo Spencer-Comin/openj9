@@ -922,7 +922,7 @@ J9::CodeGenerator::lowerTreeIfNeeded(
    // J9
    if (node->getOpCode().isCall() &&
        node->isUnsafePutOrderedCall() &&
-       node->isDontInlinePutOrderedCall())
+       node->isDontInlineOrderedCall())
       {
       // Remove this treetop
       tt->getPrevTreeTop()->setNextTreeTop(tt->getNextTreeTop());

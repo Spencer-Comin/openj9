@@ -2100,20 +2100,20 @@ J9::Node::isUnsafePutOrderedCall()
    }
 
 bool
-J9::Node::isDontInlinePutOrderedCall()
+J9::Node::isDontInlineOrderedCall()
    {
    TR_ASSERT(self()->getOpCode().isCall(), " Can only call this routine for a call node \n");
    bool isPutOrdered = self()->isUnsafePutOrderedCall();
 
    TR_ASSERT(isPutOrdered, "attempt to set dontInlinePutOrderedCall flag and not a putOrdered call");
    if (isPutOrdered)
-      return _flags.testAny(dontInlineUnsafePutOrderedCall);
+      return _flags.testAny(dontInlineUnsafeOrderedCall);
    else
       return false;
    }
 
 void
-J9::Node::setDontInlinePutOrderedCall(TR::Compilation *comp)
+J9::Node::setDontInlineOrderedCall(TR::Compilation *comp)
    {
    TR_ASSERT(self()->getOpCode().isCall(), " Can only call this routine for a call node \n");
    bool isPutOrdered = self()->isUnsafePutOrderedCall();
@@ -2121,8 +2121,8 @@ J9::Node::setDontInlinePutOrderedCall(TR::Compilation *comp)
    TR_ASSERT(isPutOrdered, "attempt to set dontInlinePutOrderedCall flag and not a putOrdered call");
    if (isPutOrdered)
       {
-      if (performNodeTransformation1(comp, "O^O NODE FLAGS: Setting dontInlineUnsafePutOrderedCall flag on node %p\n", self()))
-         _flags.set(dontInlineUnsafePutOrderedCall);
+      if (performNodeTransformation1(comp, "O^O NODE FLAGS: Setting dontInlineUnsafeOrderedCall flag on node %p\n", self()))
+         _flags.set(dontInlineUnsafeOrderedCall);
       }
 
    }
@@ -2152,7 +2152,7 @@ bool
 J9::Node::chkDontInlineUnsafePutOrderedCall()
    {
    bool isPutOrdered = self()->isUnsafePutOrderedCall();
-   return isPutOrdered && _flags.testAny(dontInlineUnsafePutOrderedCall);
+   return isPutOrdered && _flags.testAny(dontInlineUnsafeOrderedCall);
    }
 
 bool

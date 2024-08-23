@@ -851,7 +851,7 @@ TR_J9InlinerPolicy::genCodeForUnsafeGetPut(TR::Node* unsafeAddress,
                                        TR::TreeTop* indirectAccessTreeTop,
                                        bool needNullCheck, bool isUnsafeGet,
                                        bool conversionNeeded,
-                                       TR::Node* orderedCallNode = NULL)
+                                       TR::Node* orderedCallNode)
    {
    TR::CFG *cfg = comp()->getFlowGraph();
 
@@ -1200,7 +1200,7 @@ TR_J9InlinerPolicy::createUnsafePutWithOffset(TR::ResolvedMethodSymbol *calleeSy
       {
       symRef->getSymbol()->setOrdered();
       orderedCallNode = callNodeTreeTop->getNode()->duplicateTree();
-      orderedCallNode->getFirstChild()->setDontInlinePutOrderedCall(comp());
+      orderedCallNode->getFirstChild()->setDontInlineOrderedCall(comp());
 
       debugTrace(tracer(), "\t Duplicate Tree for ordered call, orderedCallNode = %p\n", orderedCallNode);
       }
@@ -1474,7 +1474,7 @@ TR_J9InlinerPolicy::createUnsafeCASCallDiamond( TR::TreeTop *callNodeTreeTop, TR
 
 
 bool
-TR_J9InlinerPolicy::createUnsafeGetWithOffset(TR::ResolvedMethodSymbol *calleeSymbol, TR::ResolvedMethodSymbol *callerSymbol, TR::TreeTop * callNodeTreeTop, TR::Node * unsafeCall, TR::DataType type, bool isVolatile, bool needNullCheck)
+TR_J9InlinerPolicy::createUnsafeGetWithOffset(TR::ResolvedMethodSymbol *calleeSymbol, TR::ResolvedMethodSymbol *callerSymbol, TR::TreeTop * callNodeTreeTop, TR::Node * unsafeCall, TR::DataType type, bool isVolatile, bool needNullCheck, bool isOrdered)
    {
    if (isVolatile && type == TR::Int64 && comp()->target().is32Bit() && !comp()->cg()->getSupportsInlinedAtomicLongVolatiles())
       return false;
@@ -1496,6 +1496,17 @@ TR_J9InlinerPolicy::createUnsafeGetWithOffset(TR::ResolvedMethodSymbol *calleeSy
 
    TR::TreeTop *prevTreeTop = callNodeTreeTop->getPrevTreeTop();
    TR::SymbolReference *newSymbolReferenceForAddress = NULL;
+   TR::SymbolReference* symRef = comp()->getSymRefTab()->findOrCreateUnsafeSymbolRef(type, true, false, isVolatile);
+   TR::Node *orderedCallNode = NULL;
+
+   if (isOrdered)
+      {
+      symRef->getSymbol()->setOrdered();
+      orderedCallNode = callNodeTreeTop->getNode()->duplicateTree();
+      orderedCallNode->getFirstChild()->setDontInlineOrderedCall(comp());
+
+      debugTrace(tracer(), "\t Duplicate Tree for ordered call, orderedCallNode = %p\n", orderedCallNode);
+      }
 
    // Since the block has to be split, we need to create temps for the arguments to the call
    // so that the right values are picked up in the 2 blocks that are targets of the if block
@@ -1509,7 +1520,6 @@ TR_J9InlinerPolicy::createUnsafeGetWithOffset(TR::ResolvedMethodSymbol *calleeSy
       unsafeCall->getChild(j)->recursivelyDecReferenceCount();
    unsafeCall->setNumChildren(1);
 
-   TR::SymbolReference* symRef = comp()->getSymRefTab()->findOrCreateUnsafeSymbolRef(type, true, false, isVolatile);
    bool conversionNeeded = comp()->fe()->dataTypeForLoadOrStore(type) != type;
    TR_ASSERT(unsafeCall == callNodeTreeTop->getNode()->getFirstChild(), "assumption not valid\n");
    TR::Node* unsafeCallWithConversion = NULL;
@@ -1582,7 +1592,8 @@ TR_J9InlinerPolicy::createUnsafeGetWithOffset(TR::ResolvedMethodSymbol *calleeSy
    genCodeForUnsafeGetPut(unsafeAddress, offset, type, callNodeTreeTop,
                           prevTreeTop, newSymbolReferenceForAddress,
                           directAccessTreeTop, arrayDirectAccessTreeTop,
-                          indirectAccessTreeTop, needNullCheck, false, conversionNeeded);
+                          indirectAccessTreeTop, needNullCheck, false, conversionNeeded,
+                          orderedCallNode);
 
    for (int32_t j=0; j<unsafeCall->getNumChildren(); j++)
       unsafeCall->getChild(j)->recursivelyDecReferenceCount();
@@ -1973,6 +1984,25 @@ TR_J9InlinerPolicy::inlineUnsafeCall(TR::ResolvedMethodSymbol *calleeSymbol, TR:
       case TR::sun_misc_Unsafe_putObjectOrdered_jlObjectJjlObject_V:
          return createUnsafePutWithOffset(calleeSymbol, callerSymbol, callNodeTreeTop, callNode, TR::Address, false, true, true);
 
+      case TR::jdk_internal_misc_Unsafe_getBooleanAcquire_jlObjectJ_Z:
+         return createUnsafeGetWithOffset(calleeSymbol, callerSymbol, callNodeTreeTop, callNode, TR::Int8, false, false, true);
+      case TR::jdk_internal_misc_Unsafe_getByteAcquire_jlObjectJ_B:
+         return createUnsafeGetWithOffset(calleeSymbol, callerSymbol, callNodeTreeTop, callNode, TR::Int8, false, false, true);
+      case TR::jdk_internal_misc_Unsafe_getCharAcquire_jlObjectJ_C:
+         return createUnsafeGetWithOffset(calleeSymbol, callerSymbol, callNodeTreeTop, callNode, TR::Int16, false, false, true);
+      case TR::jdk_internal_misc_Unsafe_getShortAcquire_jlObjectJ_S:
+         return createUnsafeGetWithOffset(calleeSymbol, callerSymbol, callNodeTreeTop, callNode, TR::Int16, false, false, true);
+      case TR::jdk_internal_misc_Unsafe_getIntAcquire_jlObjectJ_I:
+         return createUnsafeGetWithOffset(calleeSymbol, callerSymbol, callNodeTreeTop, callNode, TR::Int32, false, false, true);
+      case TR::jdk_internal_misc_Unsafe_getLongAcquire_jlObjectJ_J:
+         return createUnsafeGetWithOffset(calleeSymbol, callerSymbol, callNodeTreeTop, callNode, TR::Int64, false, false, true);
+      case TR::jdk_internal_misc_Unsafe_getFloatAcquire_jlObjectJ_F:
+         return createUnsafeGetWithOffset(calleeSymbol, callerSymbol, callNodeTreeTop, callNode, TR::Float, false, false, true);
+      case TR::jdk_internal_misc_Unsafe_getDoubleAcquire_jlObjectJ_D:
+         return createUnsafeGetWithOffset(calleeSymbol, callerSymbol, callNodeTreeTop, callNode, TR::Double, false, false, true);
+      case TR::jdk_internal_misc_Unsafe_getObjectAcquire_jlObjectJ_jlObject:
+         return createUnsafeGetWithOffset(calleeSymbol, callerSymbol, callNodeTreeTop, callNode, TR::Address, false, true, true);
+
       case TR::sun_misc_Unsafe_getBooleanVolatile_jlObjectJ_Z:
          return createUnsafeGetWithOffset(calleeSymbol, callerSymbol, callNodeTreeTop, callNode, TR::Int8, true);
       case TR::sun_misc_Unsafe_getByteVolatile_jlObjectJ_B:
@@ -2108,7 +2138,7 @@ TR_J9InlinerPolicy::isInlineableJNI(TR_ResolvedMethod *method,TR::Node *callNode
       return false;
 
    // If this put ordered call node has already been inlined, do not inline it again (JTC-JAT 71313)
-   if (callNode && callNode->isUnsafePutOrderedCall() && callNode->isDontInlinePutOrderedCall())
+   if (callNode && callNode->isUnsafePutOrderedCall() && callNode->isDontInlineOrderedCall())
       {
       debugTrace(tracer(), "Unsafe Inlining: Unsafe Call %p already inlined\n", callNode);
 

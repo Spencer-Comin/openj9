@@ -236,7 +236,7 @@ class TR_J9InlinerPolicy : public OMR_InlinerPolicy
       bool         createUnsafeGet(TR::ResolvedMethodSymbol *, TR::ResolvedMethodSymbol *, TR::TreeTop *, TR::Node *, TR::DataType, bool compress = true);
       bool         createUnsafePut(TR::ResolvedMethodSymbol *, TR::ResolvedMethodSymbol *, TR::TreeTop *, TR::Node *, TR::DataType, bool compress = true);
       TR::Node *    createUnsafeAddress(TR::Node *);
-      bool         createUnsafeGetWithOffset(TR::ResolvedMethodSymbol *, TR::ResolvedMethodSymbol *, TR::TreeTop *, TR::Node *, TR::DataType, bool, bool needNullCheck = false);
+      bool         createUnsafeGetWithOffset(TR::ResolvedMethodSymbol *, TR::ResolvedMethodSymbol *, TR::TreeTop *, TR::Node *, TR::DataType, bool, bool needNullCheck = false, bool isOrdered = false);
       TR::Node *    createUnsafeAddressWithOffset(TR::Node *);
       bool         createUnsafeFence(TR::TreeTop *, TR::Node *, TR::ILOpCodes);
 
