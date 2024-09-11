@@ -2072,7 +2072,7 @@ J9::Node::chkSpineCheckWithArrayElementChild()
    }
 
 bool
-J9::Node::isUnsafePutOrderedCall()
+J9::Node::isUnsafeOrderedCall()
    {
    if (!self()->getOpCode().isCall())
       return false;
@@ -2093,7 +2093,16 @@ J9::Node::isUnsafePutOrderedCall()
        (symbol->getRecognizedMethod() == TR::sun_misc_Unsafe_putLongOrdered_jlObjectJJ_V) ||
        (symbol->getRecognizedMethod() == TR::sun_misc_Unsafe_putFloatOrdered_jlObjectJF_V) ||
        (symbol->getRecognizedMethod() == TR::sun_misc_Unsafe_putDoubleOrdered_jlObjectJD_V) ||
-       (symbol->getRecognizedMethod() == TR::sun_misc_Unsafe_putObjectOrdered_jlObjectJjlObject_V))
+       (symbol->getRecognizedMethod() == TR::sun_misc_Unsafe_putObjectOrdered_jlObjectJjlObject_V) ||
+       (symbol->getRecognizedMethod() == TR::jdk_internal_misc_Unsafe_getBooleanAcquire_jlObjectJ_Z) ||
+       (symbol->getRecognizedMethod() == TR::jdk_internal_misc_Unsafe_getByteAcquire_jlObjectJ_B) ||
+       (symbol->getRecognizedMethod() == TR::jdk_internal_misc_Unsafe_getCharAcquire_jlObjectJ_C) ||
+       (symbol->getRecognizedMethod() == TR::jdk_internal_misc_Unsafe_getShortAcquire_jlObjectJ_S) ||
+       (symbol->getRecognizedMethod() == TR::jdk_internal_misc_Unsafe_getIntAcquire_jlObjectJ_I) ||
+       (symbol->getRecognizedMethod() == TR::jdk_internal_misc_Unsafe_getLongAcquire_jlObjectJ_J) ||
+       (symbol->getRecognizedMethod() == TR::jdk_internal_misc_Unsafe_getFloatAcquire_jlObjectJ_F) ||
+       (symbol->getRecognizedMethod() == TR::jdk_internal_misc_Unsafe_getDoubleAcquire_jlObjectJ_D) ||
+       (symbol->getRecognizedMethod() == TR::jdk_internal_misc_Unsafe_getObjectAcquire_jlObjectJ_jlObject))
       isPutOrdered = true;
 
    return isPutOrdered;
@@ -2103,7 +2112,7 @@ bool
 J9::Node::isDontInlineOrderedCall()
    {
    TR_ASSERT(self()->getOpCode().isCall(), " Can only call this routine for a call node \n");
-   bool isPutOrdered = self()->isUnsafePutOrderedCall();
+   bool isPutOrdered = self()->isUnsafeOrderedCall();
 
    TR_ASSERT(isPutOrdered, "attempt to set dontInlinePutOrderedCall flag and not a putOrdered call");
    if (isPutOrdered)
@@ -2116,7 +2125,7 @@ void
 J9::Node::setDontInlineOrderedCall(TR::Compilation *comp)
    {
    TR_ASSERT(self()->getOpCode().isCall(), " Can only call this routine for a call node \n");
-   bool isPutOrdered = self()->isUnsafePutOrderedCall();
+   bool isPutOrdered = self()->isUnsafeOrderedCall();
 
    TR_ASSERT(isPutOrdered, "attempt to set dontInlinePutOrderedCall flag and not a putOrdered call");
    if (isPutOrdered)
@@ -2151,7 +2160,7 @@ J9::Node::isUnsafeCopyMemoryIntrinsic()
 bool
 J9::Node::chkDontInlineUnsafePutOrderedCall()
    {
-   bool isPutOrdered = self()->isUnsafePutOrderedCall();
+   bool isPutOrdered = self()->isUnsafeOrderedCall();
    return isPutOrdered && _flags.testAny(dontInlineUnsafeOrderedCall);
    }
 

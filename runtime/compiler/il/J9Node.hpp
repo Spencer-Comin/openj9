@@ -298,7 +298,7 @@ public:
    bool chkSpineCheckWithArrayElementChild();
 
    // Flags used by call nodes
-   bool isUnsafePutOrderedCall();
+   bool isUnsafeOrderedCall();
    bool isDontInlineOrderedCall();
    void setDontInlineOrderedCall(TR::Compilation *comp);
    bool chkDontInlineUnsafePutOrderedCall();

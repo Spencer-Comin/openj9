@@ -2138,7 +2138,7 @@ TR_J9InlinerPolicy::isInlineableJNI(TR_ResolvedMethod *method,TR::Node *callNode
       return false;
 
    // If this put ordered call node has already been inlined, do not inline it again (JTC-JAT 71313)
-   if (callNode && callNode->isUnsafePutOrderedCall() && callNode->isDontInlineOrderedCall())
+   if (callNode && callNode->isUnsafeOrderedCall() && callNode->isDontInlineOrderedCall())
       {
       debugTrace(tracer(), "Unsafe Inlining: Unsafe Call %p already inlined\n", callNode);
 
