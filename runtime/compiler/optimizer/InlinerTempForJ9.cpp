@@ -854,8 +854,7 @@ TR_J9InlinerPolicy::genCodeForUnsafeGetPut(TR::Node* unsafeAddress,
                                        TR::TreeTop* directAccessWithConversionTreeTop,
                                        bool needNullCheck, bool isUnsafeGet,
                                        bool conversionNeeded,
-                                       bool arrayBlockNeeded, bool typeTestsNeeded,
-                                       TR::Node* orderedCallNode = NULL)
+                                       bool arrayBlockNeeded, bool typeTestsNeeded)
    {
    TR::CFG *cfg = comp()->getFlowGraph();
    TR_OpaqueClassBlock *javaLangClass = comp()->getClassClassPointer(/* isVettedForAOT = */ true);
@@ -1222,13 +1221,6 @@ TR_J9InlinerPolicy::genCodeForUnsafeGetPut(TR::Node* unsafeAddress,
                             );
       nullchkTree->getNode()->getByteCodeInfo().setCallerIndex(comp()->getCurrentInlinedSiteIndex());
       }
-
-   if (!isUnsafeGet && joinBlock && orderedCallNode)
-      {
-      TR::TreeTop *orderedCallTree = TR::TreeTop::create(comp(), orderedCallNode);
-      joinBlock->prepend(orderedCallTree);
-      }
-
    }
 
 /*
@@ -1443,16 +1435,6 @@ TR_J9InlinerPolicy::createUnsafePutWithOffset(TR::ResolvedMethodSymbol *calleeSy
    TR::TreeTop *prevTreeTop = callNodeTreeTop->getPrevTreeTop();
    TR::SymbolReference *newSymbolReferenceForAddress = unsafeCall->getChild(1)->getSymbolReference();
    TR::SymbolReference * symRef = comp()->getSymRefTab()->findOrCreateUnsafeSymbolRef(type, true, false, isVolatile);
-   TR::Node *orderedCallNode = NULL;
-
-   if (isOrdered)
-      {
-      symRef->getSymbol()->setOrdered();
-      orderedCallNode = callNodeTreeTop->getNode()->duplicateTree();
-      orderedCallNode->getFirstChild()->setDontInlinePutOrderedCall(comp());
-
-      debugTrace(tracer(), "\t Duplicate Tree for ordered call, orderedCallNode = %p\n", orderedCallNode);
-      }
 
    static char *disableIllegalWriteReport = feGetEnv("TR_DisableIllegalWriteReport");
    TR::TreeTop* reportFinalFieldModification = NULL;
@@ -1608,8 +1590,7 @@ TR_J9InlinerPolicy::createUnsafePutWithOffset(TR::ResolvedMethodSymbol *calleeSy
                           directAccessTreeTop, arrayDirectAccessTreeTop,
                           indirectAccessTreeTop, directAccessWithConversionTreeTop,
                           needNullCheck, false, conversionNeeded,
-                          arrayBlockNeeded, typeTestsNeeded,
-                          orderedCallNode);
+                          arrayBlockNeeded, typeTestsNeeded);
 
 
    // Test for static final field
@@ -2696,14 +2677,6 @@ TR_J9InlinerPolicy::isInlineableJNI(TR_ResolvedMethod *method,TR::Node *callNode
    //
    if (comp->getOption(TR_DisableUnsafe))
       return false;
-
-   // If this put ordered call node has already been inlined, do not inline it again (JTC-JAT 71313)
-   if (callNode && callNode->isUnsafePutOrderedCall() && callNode->isDontInlinePutOrderedCall())
-      {
-      debugTrace(tracer(), "Unsafe Inlining: Unsafe Call %p already inlined\n", callNode);
-
-      return false;
-      }
 
    if ((TR::Compiler->vm.canAnyMethodEventsBeHooked(comp) && !comp->fej9()->methodsCanBeInlinedEvenIfEventHooksEnabled(comp)) ||
        (comp->fej9()->isAnyMethodTracingEnabled(method->getPersistentIdentifier()) &&
