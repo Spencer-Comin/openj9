@@ -78,9 +78,9 @@ void J9::ARM64::JNILinkage::releaseVMAccess(TR::Node *callNode, TR::Register *vm
    //    addimmx scratch0, vmThreadReg, #publicFlagsOffset
    //    movzx   scratch1, constReleaseVMAccessOutOfLineMask
    //
-   //    dmb ishst
+   //    prfm    pstL1keep, [scratch0]
    // loopHead:
-   //    ldxrx   scratch2, [scratch0]
+   //    ldaxrx  scratch2, [scratch0]
    //    tst     scratch2, scratch1
    //    b.ne    releaseVMAccessSnippet
    //    andimmx scratch2, scratch2, constReleaseVMAccessMask
@@ -93,15 +93,12 @@ void J9::ARM64::JNILinkage::releaseVMAccess(TR::Node *callNode, TR::Register *vm
 
    generateTrg1Src1ImmInstruction(cg(), TR::InstOpCode::addimmx, callNode, scratchReg0, vmThreadReg, fej9->thisThreadGetPublicFlagsOffset());
    loadConstant64(cg(), callNode, fej9->constReleaseVMAccessOutOfLineMask(), scratchReg1);
-   // dmb ishst (Inner Shareable store barrier)
-   // Arm Architecture Reference Manual states:
-   // "This architecture assumes that all PEs that use the same operating system or hypervisor are in the same Inner Shareable shareability domain"
-   // thus, inner shareable dmb suffices
-   generateSynchronizationInstruction(cg(), TR::InstOpCode::dmb, callNode, TR::InstOpCode::ishst);
+   generateMemImmInstruction(cg, TR::InstOpCode::prfmimm, node,
+            TR::MemoryReference::createWithDisplacement(cg(), scratchReg0, 0), toPrefetchOp(TR::ARM64PrefetchType::STORE, TR::ARM64PrefetchTarget::L1, TR::ARM64PrefetchPolicy::KEEP));
 
    TR::LabelSymbol *loopHead = generateLabelSymbol(cg());
    generateLabelInstruction(cg(), TR::InstOpCode::label, callNode, loopHead);
-   generateTrg1MemInstruction(cg(), TR::InstOpCode::ldxrx, callNode, scratchReg2, TR::MemoryReference::createWithDisplacement(cg(), scratchReg0, 0));
+   generateTrg1MemInstruction(cg(), TR::InstOpCode::ldaxrx, callNode, scratchReg2, TR::MemoryReference::createWithDisplacement(cg(), scratchReg0, 0));
    generateTestInstruction(cg(), callNode, scratchReg2, scratchReg1, true);
 
    TR::LabelSymbol *releaseVMAccessSnippetLabel = generateLabelSymbol(cg());
@@ -138,8 +135,9 @@ void J9::ARM64::JNILinkage::acquireVMAccess(TR::Node *callNode, TR::Register *vm
    //    addimmx scratch0, vmThreadReg, #publicFlagsOffset
    //    movzx   scratch1, constAcquireMAccessOutOfLineMask
    //
+   //    prfm    pstL1keep, [scratch0]
    // loopHead:
-   //    ldxrx   scratch2, [scratch0]
+   //    ldaxrx  scratch2, [scratch0]
    //    cbnzx   scratch2, reacquireVMAccessSnippet
    //    stxrx   scratch2, scratch1, [scratch0]
    //    cbnz    scratch2, loopHead
@@ -149,9 +147,12 @@ void J9::ARM64::JNILinkage::acquireVMAccess(TR::Node *callNode, TR::Register *vm
    generateTrg1Src1ImmInstruction(cg(), TR::InstOpCode::addimmx, callNode, scratchReg0, vmThreadReg, fej9->thisThreadGetPublicFlagsOffset());
    loadConstant64(cg(), callNode, fej9->constAcquireVMAccessOutOfLineMask(), scratchReg1);
 
+   generateMemImmInstruction(cg, TR::InstOpCode::prfmimm, node,
+         TR::MemoryReference::createWithDisplacement(cg(), scratchReg0, 0), toPrefetchOp(TR::ARM64PrefetchType::STORE, TR::ARM64PrefetchTarget::L1, TR::ARM64PrefetchPolicy::KEEP));
+
    TR::LabelSymbol *loopHead = generateLabelSymbol(cg());
    generateLabelInstruction(cg(), TR::InstOpCode::label, callNode, loopHead);
-   generateTrg1MemInstruction(cg(), TR::InstOpCode::ldxrx, callNode, scratchReg2, TR::MemoryReference::createWithDisplacement(cg(), scratchReg0, 0));
+   generateTrg1MemInstruction(cg(), TR::InstOpCode::ldaxrx, callNode, scratchReg2, TR::MemoryReference::createWithDisplacement(cg(), scratchReg0, 0));
 
    TR::LabelSymbol *reacquireVMAccessSnippetLabel = generateLabelSymbol(cg());
    TR::LabelSymbol *reacquireVMAccessRestartLabel = generateLabelSymbol(cg());
