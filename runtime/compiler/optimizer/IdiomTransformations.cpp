@@ -8541,7 +8541,7 @@ public:
       }
 
    // Insert nodes and maintain the CFG
-   TR_ArrayIterator<ArraySetState*> iteratorArraySet(&listArraySet);
+   TR_ArrayIterator<ArraySetState> iteratorArraySet(&listArraySet);
    TR_ASSERT(!listArraySet.isEmpty(), "Expected at least on set of arrayset");
    // anchor arrayset symbol intialization trees
    block = trans->modifyBlockByVersioningCheck(block, trTreeTop, lengthByteNode->duplicateTree());
@@ -8561,7 +8561,7 @@ public:
    ArraySetState temp = ArraySetState::createTemp(comp, valueType);
    for (int i = 1; i < listArraySet.size(); i++)
       {
-      tt = temp.genCopyFrom(comp, tt, listArraySet[i]);
+      tt = temp.genCopyFrom(tt, listArraySet[i]);
       TR::Node *addressNode = listArraySet[i]->genAddressLoad();
       // create new block b
       TR::Block *nextIterBlock = TR::Block::createEmptyBlock(comp);
@@ -8576,7 +8576,7 @@ public:
          TR::Block::insertBlockAsFallThrough(comp, block, updateTempBlock);
          block = updateTempBlock;
          tt = updateTempBlock->getEntry();
-         tt = listArraySet[j]->genCopyFrom(comp, tt, temp);
+         tt = listArraySet[j]->genCopyFrom(tt, temp);
          // generate goto b
          TR::Node *gotoNode = TR::Node::create(trNode, TR::Goto, 0, nextIterBlock->getEntry());
          tt = TR::TreeTop::create(comp, tt, gotoNode);
@@ -8623,7 +8623,7 @@ public:
       TR::Node *adjustedLength = TR::Node::create(comp->target().is64Bit() ? TR::lmin : TR::imin, 2, bytesToNext, listArraySet[i]->genLengthLoad());
 
       TR::Node *updatedCursorValue = TR::Node::create(comp->target().is64Bit() ? TR::aladd : TR::aiadd, currentAddressNode, adjustedLength);
-      cursorStoreNode = TR::Node::create(astore, 1, updatedCursorValue);
+      cursorStoreNode = TR::Node::create(TR::astore, 1, updatedCursorValue);
       cursorStoreNode->setSymbolReference(cursorSymbol);
       tt = TR::TreeTop::create(comp, tt, cursorStoreNode);
 
