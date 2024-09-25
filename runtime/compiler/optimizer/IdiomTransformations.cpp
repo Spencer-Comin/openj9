@@ -8622,7 +8622,7 @@ public:
       bytesToNext = TR::Node::create(comp->target().is64Bit() ? TR::a2l : TR::a2i, 1, bytesToNext);
       TR::Node *adjustedLength = TR::Node::create(comp->target().is64Bit() ? TR::lmin : TR::imin, 2, bytesToNext, listArraySet[i]->genLengthLoad());
 
-      TR::Node *updatedCursorValue = TR::Node::create(comp->target().is64Bit() ? TR::aladd : TR::aiadd, currentAddressNode, adjustedLength);
+      TR::Node *updatedCursorValue = TR::Node::create(comp->target().is64Bit() ? TR::aladd : TR::aiadd, 2, currentAddressNode, adjustedLength);
       cursorStoreNode = TR::Node::create(TR::astore, 1, updatedCursorValue);
       cursorStoreNode->setSymbolReference(cursorSymbol);
       tt = TR::TreeTop::create(comp, tt, cursorStoreNode);
