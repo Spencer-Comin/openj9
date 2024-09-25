@@ -8116,12 +8116,12 @@ public:
       }
 
    TR::TreeTop *
-   genCopyFrom(TR::TreeTop *tt,  ArraySetState &other)
+   genCopyFrom(TR::TreeTop *tt,  ArraySetState *other)
       {
       TR_ASSERT(symbolsCreated, "Cannot generate a store into an ArraySetState before symbols are intialized");
-      tt = TR::TreeTop::create(comp, tt, genAddressStore(other.genAddressLoad()));
-      tt = TR::TreeTop::create(comp, tt, genValueStore(other.genValueLoad()));
-      tt = TR::TreeTop::create(comp, tt, genLengthStore(other.genLengthLoad()));
+      tt = TR::TreeTop::create(comp, tt, genAddressStore(other->genAddressLoad()));
+      tt = TR::TreeTop::create(comp, tt, genValueStore(other->genValueLoad()));
+      tt = TR::TreeTop::create(comp, tt, genLengthStore(other->genLengthLoad()));
       return tt;
       }
 
@@ -8549,7 +8549,7 @@ public:
    TR::TreeTop *tt = block->getLastRealTreeTop();
    for (ArraySetState *state = iteratorArraySet.getFirst(); state; state = iteratorArraySet.getNext())
       {
-      tt = state->anchorSymbols(comp, tt);
+      tt = state->anchorSymbols(tt);
       }
    // generate insertion sort of arrayset symbols
    //     for (i = 1; i < listArraySet.size(); i++) // unrolled
@@ -8558,10 +8558,10 @@ public:
    //             if (listArraySet[j-1].address > temp.address)
    //                 listArraySet[j] = temp
    //                 break inner loop
-   ArraySetState temp = ArraySetState::createTemp(comp, valueType);
+   ArraySetState *temp = ArraySetState::createTemp(comp, valueType);
    for (int i = 1; i < listArraySet.size(); i++)
       {
-      tt = temp.genCopyFrom(tt, listArraySet[i]);
+      tt = temp->genCopyFrom(tt, listArraySet[i]);
       TR::Node *addressNode = listArraySet[i]->genAddressLoad();
       // create new block b
       TR::Block *nextIterBlock = TR::Block::createEmptyBlock(comp);
