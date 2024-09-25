@@ -8037,15 +8037,16 @@ class ArraySetState
 
    bool symbolsInitialized;
    bool symbolsCreated;
+   TR::Compilation *comp;
 
-   ArraySetState(TR::Node *address, TR::Node *value, TR::Node *length, bool is64Bit)
-      : addressNode(address), valueNode(value), valueType(value->getType()), lengthNode(length),
-        is64Bit(is64Bit), symbolsCreated(false), symbolsInitialized(false)
+   ArraySetState(TR::Compilation *comp, TR::Node *address, TR::Node *value, TR::Node *length, bool is64Bit)
+      : addressNode(address), valueNode(value), valueType(value->getDataType().getDataType()), lengthNode(length),
+        is64Bit(is64Bit), symbolsCreated(false), symbolsInitialized(false), comp(comp)
       {
       }
 
    ArraySetState(TR::Compilation *comp, TR::DataTypes valueType)
-      : valueType(valueType), symbolsCreated(true), symbolsInitialized(false)
+      : valueType(valueType), symbolsCreated(true), symbolsInitialized(false), comp(comp)
       {
       is64Bit = comp->target().is64Bit();
       addressSymbol = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), TR::Address);
@@ -8063,7 +8064,7 @@ public:
    static ArraySetState *
    create(TR::Compilation *comp, TR::Node *address, TR::Node *value, TR::Node *length)
       {
-      return new (comp->trHeapMemory()) ArraySetState(address, value, length, comp->target().is64Bit());
+      return new (comp->trHeapMemory()) ArraySetState(comp, address, value, length, comp->target().is64Bit());
       }
 
    TR::Node *
@@ -8086,7 +8087,7 @@ public:
    genValueStore(TR::Node *value)
       {
       TR_ASSERT(symbolsCreated, "Cannot store to an ArraySetState value before the value symbol is created");
-      TR::Node *storeNode = TR::Node::create(TR::IL::opCodeForDirectStore(valueType), 1, value);
+      TR::Node *storeNode = TR::Node::create(comp->il.opCodeForDirectStore(valueType), 1, value);
       storeNode->setSymbolReference(valueSymbol);
       return storeNode;
       }
@@ -8095,7 +8096,7 @@ public:
    genValueLoad()
       {
       TR_ASSERT(symbolsCreated && symbolsInitialized, "Cannot load from an ArraySetState value before the value symbol is initialized");
-      return TR::Node::createWithSymRef(TR::IL::opCodeForDirectLoad(valueType), 0, valueSymbol);
+      return TR::Node::createWithSymRef(comp->il.opCodeForDirectLoad(valueType), 0, valueSymbol);
       }
 
    TR::Node *
@@ -8115,7 +8116,7 @@ public:
       }
 
    TR::TreeTop *
-   genCopyFrom(TR::Compilation *comp, TR::TreeTop *tt,  TR::TreeTop &other)
+   genCopyFrom(TR::TreeTop *tt,  ArraySetState &other)
       {
       TR_ASSERT(symbolsCreated, "Cannot generate a store into an ArraySetState before symbols are intialized");
       tt = TR::TreeTop::create(comp, tt, genAddressStore(other.genAddressLoad()));
@@ -8125,7 +8126,7 @@ public:
       }
 
    TR::TreeTop *
-   anchorSymbols(TR::Compilation *comp, TR::TreeTop *tt)
+   anchorSymbols(TR::TreeTop *tt)
       {
       TR_ASSERT(!symbolsCreated || !symbolsInitialized, "Cannot anchor ArraySetState more than once");
       symbolsInitialized = true;
@@ -8327,21 +8328,21 @@ public:
       }
 
    // List<TR::Node> listArraySet(comp->trMemory());
-   TR_Array<ArraySetState> listArraySet(comp->trMemory());
+   TR_Array<ArraySetState*> listArraySet(comp->trMemory());
    TR::Node *computeIndex = NULL;
    TR::Node * lengthNode = NULL;
    TR::Node * lengthByteNode = NULL;
-   TR::DataTypes valueType = iteratorStores.getFirst()->getChild(1)->getChild(0)->getType();
+   TR::DataTypes valueType = iteratorStores.getFirst()->getChild(1)->getChild(0)->getDataType().getDataType();
 
    for (inStoreNode = iteratorStores.getFirst(); inStoreNode; inStoreNode = iteratorStores.getNext())
       {
       TR::Node * outputNode = inStoreNode->getChild(0)->duplicateTree();
       TR::Node * valueNode = convertStoreToLoad(comp, inStoreNode->getChild(1));
 
-      if (valueNode->getType() != valueType)
+      if (valueNode->getDataType().getDataType() != valueType)
          {
          traceMsg(comp, "cannot transform multiple arraysets with heterogeneous types\n");
-         return false
+         return false;
          }
 
       uint32_t elementSize = 0;
@@ -8540,7 +8541,7 @@ public:
       }
 
    // Insert nodes and maintain the CFG
-   TR_ArrayIterator<ArraySetState> iteratorArraySet(&listArraySet);
+   TR_ArrayIterator<ArraySetState*> iteratorArraySet(&listArraySet);
    TR_ASSERT(!listArraySet.isEmpty(), "Expected at least on set of arrayset");
    // anchor arrayset symbol intialization trees
    block = trans->modifyBlockByVersioningCheck(block, trTreeTop, lengthByteNode->duplicateTree());
@@ -8561,21 +8562,21 @@ public:
    for (int i = 1; i < listArraySet.size(); i++)
       {
       tt = temp.genCopyFrom(comp, tt, listArraySet[i]);
-      TR::Node *addressNode = listArraySet[i].genAddressLoad();
+      TR::Node *addressNode = listArraySet[i]->genAddressLoad();
       // create new block b
       TR::Block *nextIterBlock = TR::Block::createEmptyBlock(comp);
       for (int j = i; j > 0; j--)
       {
          // create new block b'
          TR::Block *nextElementBlock = TR::Block::createEmptyBlock(comp);
-         TR::Node *ifNode = TR::Node::createif(TR::ifacmple, listArraySet[j - 1].genAddressLoad(), addressNode, nextElementBlock->getEntry()); // goto b'
+         TR::Node *ifNode = TR::Node::createif(TR::ifacmple, listArraySet[j - 1]->genAddressLoad(), addressNode, nextElementBlock->getEntry()); // goto b'
          tt = TR::TreeTop::create(comp, tt, ifNode);
          // create new block b'', move tt to start of b''
          TR::Block *updateTempBlock = TR::Block::createEmptyBlock(comp);
          TR::Block::insertBlockAsFallThrough(comp, block, updateTempBlock);
          block = updateTempBlock;
          tt = updateTempBlock->getEntry();
-         tt = listArraySet[j].genCopyFrom(comp, tt, temp);
+         tt = listArraySet[j]->genCopyFrom(comp, tt, temp);
          // generate goto b
          TR::Node *gotoNode = TR::Node::create(trNode, TR::Goto, 0, nextIterBlock->getEntry());
          tt = TR::TreeTop::create(comp, tt, gotoNode);
@@ -8592,7 +8593,7 @@ public:
 
    // generate a cursor address symbol cursor = a[0]
    TR::SymbolReference *cursorSymbol = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), TR::Address);
-   TR::Node *nextAddressNode = listArraySet[0].genAddressLoad();
+   TR::Node *nextAddressNode = listArraySet[0]->genAddressLoad();
    TR::Node *cursorStoreNode = TR::Node::create(TR::astore, 1, nextAddressNode);
    cursorStoreNode->setSymbolReference(cursorSymbol);
    tt = TR::TreeTop::create(comp, tt, cursorStoreNode);
@@ -8616,17 +8617,17 @@ public:
       block = currentElementBlock;
       tt = currentElementBlock->getEntry();
 
-      nextAddressNode = listArraySet[i+1].genAddressLoad();
+      nextAddressNode = listArraySet[i+1]->genAddressLoad();
       TR::Node *bytesToNext = TR::Node::create(TR::asub, 2, nextAddressNode, currentAddressNode);
       bytesToNext = TR::Node::create(comp->target().is64Bit() ? TR::a2l : TR::a2i, 1, bytesToNext);
-      TR::Node *adjustedLength = TR::Node::create(comp->target().is64Bit() ? TR::lmin : TR::imin, 2, bytesToNext, listArraySet[i].genLengthLoad());
+      TR::Node *adjustedLength = TR::Node::create(comp->target().is64Bit() ? TR::lmin : TR::imin, 2, bytesToNext, listArraySet[i]->genLengthLoad());
 
       TR::Node *updatedCursorValue = TR::Node::create(comp->target().is64Bit() ? TR::aladd : TR::aiadd, currentAddressNode, adjustedLength);
       cursorStoreNode = TR::Node::create(astore, 1, updatedCursorValue);
       cursorStoreNode->setSymbolReference(cursorSymbol);
       tt = TR::TreeTop::create(comp, tt, cursorStoreNode);
 
-      arrayset = TR::Node::create(TR::arrayset, 3, currentAddressNode, listArraySet[i].genValueLoad(), adjustedLength);
+      arrayset = TR::Node::create(TR::arrayset, 3, currentAddressNode, listArraySet[i]->genValueLoad(), adjustedLength);
       arrayset->setSymbolReference(comp->getSymRefTab()->findOrCreateArraySetSymbol());
       tt = TR::TreeTop::create(comp, tt, arrayset);
 
@@ -8635,7 +8636,7 @@ public:
       tt = nextElementBlock->getEntry();
       }
 
-   arrayset = TR::Node::create(TR::arrayset, 3, nextAddressNode, listArraySet[listArraySet.lastIndex()].genValueLoad(), listArraySet[listArraySet.lastIndex()].genLengthLoad());
+   arrayset = TR::Node::create(TR::arrayset, 3, nextAddressNode, listArraySet[listArraySet.lastIndex()]->genValueLoad(), listArraySet[listArraySet.lastIndex()]->genLengthLoad());
    arrayset->setSymbolReference(comp->getSymRefTab()->findOrCreateArraySetSymbol());
    tt = TR::TreeTop::create(comp, tt, arrayset);
 
