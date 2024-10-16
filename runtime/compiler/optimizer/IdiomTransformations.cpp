@@ -8014,6 +8014,522 @@ CISCTransform2PtrArraySet(TR_CISCTransformer *trans)
    return true;
    }
 
+static bool
+tryTransformSingleArraySet(TR::Compilation *comp, TR::Node *inStoreNode, TR::Node *indexRepNode, TR::Node *index1RepNode, TR::TreeTop *&trTreeTop,
+                        TR::Node *dstBaseRepNode, TR::Node *variableORconstRepNode1, TR::SymbolReference *indexVarSymRef, TR::SymbolReference *indexVar1SymRef,
+                        bool isIncrement0, bool isIncrement1, int32_t lengthMod, TR::Node *&computeIndex, TR::Node *&lengthNode)
+   {
+   TR::Node * indexNode = createLoad(indexRepNode);
+   TR::Node * valueNode = inStoreNode->getChild(1);
+   if (valueNode->getOpCode().isLoadDirect() && valueNode->getOpCode().hasSymbolReference())
+      {
+      if (valueNode->getSymbolReference()->getReferenceNumber() == indexNode->getSymbolReference()->getReferenceNumber() ||
+          valueNode->getSymbolReference()->getReferenceNumber() == index1RepNode->getSymbolReference()->getReferenceNumber())
+         {
+         traceMsg(comp, "arraystore tree has induction variable on rhs\n");
+         return false;
+         }
+      }
+
+   TR::Node * lengthByteNode = NULL;
+
+   TR::Node * outputNode = inStoreNode->getChild(0)->duplicateTree();
+   valueNode = convertStoreToLoad(comp, valueNode);
+
+   uint32_t elementSize = 0;
+   if (inStoreNode->getType().isAddress())
+      elementSize = TR::Compiler->om.sizeofReferenceField();
+   else
+      elementSize = inStoreNode->getSize();
+
+   // Depending on the induction variable used in the loop, determine if it's count up or count down.
+   bool loopIsIncrement = false;
+   if (findAndOrReplaceNodesWithMatchingSymRefNumber(outputNode->getSecondChild(), NULL, indexVarSymRef->getReferenceNumber()))
+      {
+      loopIsIncrement = isIncrement0;
+      }
+   else
+      {
+      TR_ASSERT(findAndOrReplaceNodesWithMatchingSymRefNumber(outputNode->getSecondChild(), NULL, indexVar1SymRef->getReferenceNumber()), "Unable to find matching array access induction variable.\n");
+      loopIsIncrement = isIncrement1;
+      }
+
+   if (!loopIsIncrement)    // count-down loop
+      {
+      // This case covers a backwards counting loops of the following general forms:
+
+      //  A)  Induction variable update BEFORE the array store.
+      //    i = i_init;
+      //    do {
+      //        i--;
+      //        a [i + c] = d;
+      //    } while ( i >= i_last );
+      //
+      //  B)  Induction variable update AFTER the array store.
+      //    i = i_init;
+      //    do {
+      //        a [i + c] = d;
+      //        i--;
+      //    } while ( i >= i_last );
+      //
+      // The loops can be transformed into an equivalent forward counting loop:
+      //    i = i_last';
+      //    do {
+      //       a [i + c] = d;
+      //       i++;
+      //    } while (i <= i_init')
+      //
+      // Where:
+      //    A)  Induction variable update BEFORE the array store.
+      //      i_init' = i_init - 1
+      //      i_last' = i_last - 1
+      //    B)  Induction variable update AFTER the array store.
+      //      i_init' = i_init
+      //      i_last' = i_last
+      //
+      // This forward version can be reduced to an arrayset
+      //     arrayset
+      //          a[i_last' + c]         // Address of first element to set (forward sense)
+      //          bconst d              // Element to set.
+      //          i_init - i_last (+1)  // Length
+      // Calculate the last value of the induction variable in the original count-down loop.
+      // This value becomes the index of the first element in the count-up version, and hence
+      // the first element of the arrayset.
+
+      TR::Node * lastValueNode = convertStoreToLoad(comp, variableORconstRepNode1);
+
+      // Determine if the induction variable update is before the arrayset
+      bool isIndexVarUpdateBeforeArrayset = (trans->findStoreToSymRefInInsertBeforeNodes(indexVarSymRef->getReferenceNumber()) != NULL);
+
+      // Adjust for the index based on exit condition (i.e. > vs >= ) and whether the induction
+      // variable update is before/after the array stores.
+      //   i_last':             > (lengthMod=0)     >= (lengthMod=1)
+      //                        ---------------     ----------------
+      //            Before         i_last               i_last - 1
+      //            After          i_last + 1           i_last
+      int32_t lastLegalValueAdjustment = -lengthMod;
+      if (!isIndexVarUpdateBeforeArrayset)
+         lastLegalValueAdjustment++;
+
+      // If the induction variable update is before the arrayset, we need to validate whether the array access
+      // commoned the node with the iadd/isub of the induction variable.  i.e.
+      //
+      // istore #indvar
+      //    iadd (A)
+      //        iload #indvar (B)
+      //        iconst -1
+      // istore
+      //    aiadd
+      //        aload arraybase
+      //        aiadd
+      //            index
+      //            iconst array_header_size
+      //
+      // where index could be:
+      //   (A) commoned to iadd, effectively using new value of #indvar
+      //   (B) commoned to iload, effectively using old value of #indvar
+      //   (C) a new iload using new value of #indvar
+      //
+      //  Case (A) is problematic, as the induction variable store is still before the arrayset, but
+      //  the array access pattern is using the original value of #indvar.
+      //  Case (B) is okay, in that topological embedding will recognize that to be equivalent to
+      //  updating induction variable after the arraystore.
+      //  Case (C) is handled correctly.
+      int32_t arrayStoreCommoningAdjustment = 0;
+      if (isIndexVarUpdateBeforeArrayset)
+         {
+         TR::Node *origIndVarStore = ivStoreCISCNode->getHeadOfTrNodeInfo()->_node;
+         TR::Node *origIndVarLoad = origIndVarStore->getChild(0)->getChild(0);
+
+         TR::Node *origArrayIndVarLoad = findLoadWithMatchingSymRefNumber(inStoreNode->getChild(0)->getSecondChild(), indexVarSymRef->getReferenceNumber());
+
+         // If they match, we have case (B), so we need to readjust by +1.
+         if (origIndVarLoad == origArrayIndVarLoad)
+            {
+            traceMsg(comp, "Identified array index to have been referencing original induction variable value: %p\n",origIndVarLoad);
+            arrayStoreCommoningAdjustment = 1;
+            }
+         }
+
+      TR::Node *lastLegalValue = createOP2(comp, TR::iadd, lastValueNode,
+                                 TR::Node::create(indexNode, TR::iconst, 0, lastLegalValueAdjustment + arrayStoreCommoningAdjustment));
+
+      // Search for the induction variable in the array access sub-tree and replace that node
+      // with the last value index we just calculated.
+      bool isFound = findAndOrReplaceNodesWithMatchingSymRefNumber(outputNode->getSecondChild(), lastLegalValue, indexVarSymRef->getReferenceNumber());
+      if (!isFound && (indexVarSymRef != indexVar1SymRef))
+            isFound = findAndOrReplaceNodesWithMatchingSymRefNumber(outputNode->getSecondChild(), lastLegalValue, indexVar1SymRef->getReferenceNumber());
+
+      TR_ASSERT(isFound, "Count down arrayset was unable to find and replace array access induction variable.\n");
+
+      // Determine the length of the arrayset (# of elements to set) and adjusting it based on exit condition.
+      // In the case of the induction variable update is before the array store, the indexNode value has already been
+      // decremented by 1 once already (since i--; is inserted before the final arrayset.  We need to readjust that.
+      //   length:             > (lengthMod=0)          >= (lengthMod=1)
+      //                        ---------------           ----------------
+      //            Before     i_init - i_last + 1         i_init - i_last +2
+      //            After      i_init - i_last             i_init - i_last +1
+      int32_t lengthAdjustment = lengthMod + ((isIndexVarUpdateBeforeArrayset)?1:0);
+
+      lengthNode = createOP2(comp, TR::isub, indexNode, lastValueNode);
+      lengthNode = createOP2(comp, TR::iadd, lengthNode, TR::Node::create(indexNode, TR::iconst, 0, lengthAdjustment));
+
+      // Determine the final induction variable value on loop exit.
+      // If the induction variable update is before the arrayset,
+      //    it will be the last value we access.
+      // If the induction variable update is after the arrayset,
+      //    it will always be one less than the last index (count-down sense) that we access.
+      computeIndex = createOP2(comp, TR::iadd, lastLegalValue, TR::Node::create(indexRepNode, TR::iconst, 0, ((isIndexVarUpdateBeforeArrayset)?0:-1) - arrayStoreCommoningAdjustment));
+
+      }
+   else      // count-up loop
+      {
+      TR::Node * lastValue = convertStoreToLoad(comp, variableORconstRepNode1);
+      lastValue = createOP2(comp, isIncrement0 ? TR::iadd : TR::isub, lastValue,
+                                 TR::Node::create(indexNode, TR::iconst, 0, lengthMod));
+
+      // Induction variable 0 is always part of the loop exit condition based on idiom graph.
+      if (isIncrement0)
+         {
+         lengthNode = createOP2(comp, TR::isub, lastValue, indexNode);
+         }
+      else
+         {
+         lengthNode = createOP2(comp, TR::isub, indexNode, lastValue);
+         }
+      computeIndex = lastValue;
+      }
+
+   lengthByteNode = lengthNode;
+   const bool longOffsets = trans->isGenerateI2L();
+   lengthByteNode = createI2LIfNecessary(comp, longOffsets, lengthByteNode);
+   if (elementSize > 1)
+      {
+      TR::Node *elementSizeNode = NULL;
+      if (longOffsets)
+         elementSizeNode = TR::Node::lconst(inStoreNode, elementSize);
+      else
+         elementSizeNode = TR::Node::iconst(inStoreNode, elementSize);
+
+      lengthByteNode = TR::Node::create(
+         longOffsets ? TR::lmul : TR::imul,
+         2,
+         lengthByteNode,
+         elementSizeNode);
+      }
+
+   TR::Node * arrayset = TR::Node::create(TR::arrayset, 3, outputNode, valueNode, lengthByteNode);
+   arrayset->setSymbolReference(comp->getSymRefTab()->findOrCreateArraySetSymbol());
+
+   // Insert nodes and maintain the CFG
+   TR_ASSERT(lengthByteNode, "Expected at least one set of arrayset.");
+   TR::Block *block = trans->modifyBlockByVersioningCheck(block, trTreeTop, lengthByteNode->duplicateTree());
+   block = trans->insertBeforeNodes(block);
+   TR::TreeTop *last = block->getLastRealTreeTop();
+   trTreeTop = TR::TreeTop::create(comp, arrayset);
+   last->join(trTreeTop);
+   return true;
+   }
+
+static bool
+tryTransformDoubleArraySet(TR::Compilation *comp, TR::Node *inStoreNode1, TR::Node *inStoreNode2, TR::Node *indexRepNode, TR::Node *index1RepNode, TR::TreeTop *&trTreeTop,
+                        TR::Node *dstBaseRepNode, TR::Node *variableORconstRepNode1, TR::SymbolReference * indexVarSymRef, TR::SymbolReference * indexVar1SymRef,
+                        bool isIncrement0, bool isIncrement1, int32_t lengthMod, TR::Node *&computeIndex, TR::Node *&lengthNode)
+   {
+   TR::Node * indexNode = createLoad(indexRepNode);
+   TR::Node * value1Node = inStoreNode1->getChild(1);
+   TR::Node * value2Node = inStoreNode2->getChild(1);
+   // TODO: merge these if statements
+   if (value1Node->getOpCode().isLoadDirect() && value1Node->getOpCode().hasSymbolReference())
+      {
+      if (value1Node->getSymbolReference()->getReferenceNumber() == indexNode->getSymbolReference()->getReferenceNumber() ||
+            value1Node->getSymbolReference()->getReferenceNumber() == index1RepNode->getSymbolReference()->getReferenceNumber())
+         {
+         traceMsg(comp, "arraystore tree has induction variable on rhs\n");
+         return false;
+         }
+      }
+   if (value2Node->getOpCode().isLoadDirect() && value2Node->getOpCode().hasSymbolReference())
+      {
+      if (value2Node->getSymbolReference()->getReferenceNumber() == indexNode->getSymbolReference()->getReferenceNumber() ||
+            value2Node->getSymbolReference()->getReferenceNumber() == index1RepNode->getSymbolReference()->getReferenceNumber())
+         {
+         traceMsg(comp, "arraystore tree has induction variable on rhs\n");
+         return false;
+         }
+      }
+
+   TR::Node * output1Node = inStoreNode1->getChild(0)->duplicateTree();
+   TR::Node * output2Node = inStoreNode2->getChild(0)->duplicateTree();
+   value1Node = convertStoreToLoad(comp, value1Node);
+   value2Node = convertStoreToLoad(comp, value2Node);
+
+   uint32_t elementSize = 0;
+   if (inStoreNode1->getType().isAddress())
+      elementSize = TR::Compiler->om.sizeofReferenceField();
+   else
+      elementSize = inStoreNode1->getSize();
+
+   if ((inStoreNode2->getType().isAddress() && (TR::Compiler->om.sizeofReferenceField() != elementSize)) ||
+       inStoreNode2->getSize() != elementSize)
+      {
+      traceMsg(comp, "cannot perform double arrayset with unequal element sizes\n");
+      }
+
+   // Depending on the induction variable used in the loop, determine if it's count up or count down.
+   bool store1Ascending = false;
+   bool store2Ascending = false;
+   if (findAndOrReplaceNodesWithMatchingSymRefNumber(output1Node->getSecondChild(), NULL, indexVarSymRef->getReferenceNumber()))
+      {
+      store1Ascending = isIncrement0;
+      }
+   else
+      {
+      TR_ASSERT(findAndOrReplaceNodesWithMatchingSymRefNumber(output1Node->getSecondChild(), NULL, indexVar1SymRef->getReferenceNumber()), "Unable to find matching array access induction variable.\n");
+      store1Ascending = isIncrement1;
+      }
+   if (findAndOrReplaceNodesWithMatchingSymRefNumber(output2Node->getSecondChild(), NULL, indexVarSymRef->getReferenceNumber()))
+      {
+      store2Ascending = isIncrement0;
+      }
+   else
+      {
+      TR_ASSERT(findAndOrReplaceNodesWithMatchingSymRefNumber(output2Node->getSecondChild(), NULL, indexVar1SymRef->getReferenceNumber()), "Unable to find matching array access induction variable.\n");
+      store2Ascending = isIncrement1;
+      }
+
+   TR::CFG *cfg = comp->getFlowGraph();
+   TR::Block *block = trans->modifyBlockByVersioningCheck(block, trTreeTop, lengthByteNode->duplicateTree());
+   block = trans->insertBeforeNodes(block);
+   trTreeTop = block->getLastRealTreeTop();
+
+   const TR::SymbolReference *arraysetSymRef = comp->getSymRefTab()->findOrCreateArraySetSymbol();
+
+   if (store1Ascending && store2Ascending)
+      {
+      // The incoming code looks like the following:
+      //
+      //     for (int i = 0; i < length; i++) {
+      //         output1[i] = value1;
+      //         output2[i] = value2;
+      //     }
+      //
+      // Depending on the relative location of arrays output1 and output2,
+      // there are 5 possible memory layouts after the loop:
+      //
+      //     1. Full overlap (output1 == output2)
+      //         +-------------------------------------+
+      //         | value2*                             |
+      //         +-------------------------------------+
+      //         ^output1                              ^output1 + length
+      //         ^output2                              ^output2 + length
+      //
+      //     2. Partial overlap, output1 < output2
+      //         +------------------+------------------+------------------+
+      //         | value1*          | value1*          | value2*          |
+      //         +------------------+------------------+------------------+
+      //         ^output1           ^output2           ^output1 + length  ^output2 + length
+      //
+      //     3. Partial overlap, output1 > output2
+      //         +------------------+------------------+------------------+
+      //         | value2*          | value2*          | value1*          |
+      //         +------------------+------------------+------------------+
+      //         ^output2           ^output1           ^output2 + length  ^output1 + length
+      //
+      //     4. No overlap
+      //         +------------------+------------------+------------------+
+      //         | value2*          | X...        ...X | value1*          |
+      //         +------------------+------------------+------------------+
+      //         ^output2           ^output2 + length  ^output1           ^output1 + length
+      //
+      //         OR
+      //
+      //         +------------------+------------------+------------------+
+      //         | value1*          | X...        ...X | value1*          |
+      //         +------------------+------------------+------------------+
+      //         ^output1           ^output1 + length  ^output2           ^output2 + length
+      //
+      // This resulting memory layout can be equivalently generated by the following blocks:
+      //
+      //     | ...                   |
+      //     | if output1 != output2 T-+
+      //     +-F---------------------+ |
+      //       |                       |
+      //       | +---------------------V-+
+      //       | | if output1 < output2  T-+
+      //       | +------------F----------+ |
+      //       |              |            |
+      //       |              | +----------V------------------+
+      //       |              | | if output2 < output1+length T-+
+      //       |              | +-------------------F---------+ |
+      //       |              |                     |           |
+      //       |              |                     | +---------V-----------------------------------------+
+      //       | +------------V-----------------+   | | # case 2                                          |
+      //       | | if output1 >= output2+length T-+ | | arrayset(output1, value1, length)                 |
+      //       | +------------F-----------------+ | | | arrayset(output1+length, value2, output2-output1) |
+      //       |              |                   | | +--------------------+------------------------------+
+      //       |              |                   | |                      |
+      //       |              |      +------------V-V--------------------+ |
+      //       |              |      | # case 4                          | |
+      //       |              |      | arrayset(output1, value1, length) | |
+      //       |              |      +---------------------------------+-+ |
+      //       |              |                                        |   |
+      //       |              |                                        |   |
+      //       |              |                                        |   |
+      //       | +------------V--------------------------------------+ |   |
+      //       | | # case 3                                          | |   |
+      //       | | arrayset(output2+length, value1, output1-output2) | |   |
+      //       | +-------------------------+-------------------------+ |   |
+      //       |                           |                           |   |
+      //       |                           |                           |   |
+      //       |                           |                           |   |
+      //     +-V---------------------------V---------------------------V-+ |
+      //     | # case 1                                                  | |
+      //     | arrayset(output2, value2, length)                         | |
+      //     +---------------------------------------------------------+-+ |
+      //                                                               |   |
+      //                                                             +-V---V-+
+      //                                                             | ...   |
+
+      TR::Node *lastValue = createOP2(comp, isIncrement0 ? TR::iadd : TR::isub,
+                                       convertStoreToLoad(comp, variableORconstRepNode1),
+                                       TR::Node::iconst(indexNode, lengthMod));
+      TR::Node *lengthNode = NULL;
+      // Induction variable 0 is always part of the loop exit condition based on idiom graph.
+      if (isIncrement0)
+         {
+         lengthNode = createOP2(comp, TR::isub, lastValue, indexNode);
+         }
+      else
+         {
+         lengthNode = createOP2(comp, TR::isub, indexNode, lastValue);
+         }
+
+      TR::Node *lengthByteNode = lengthNode;
+      const bool longOffsets = trans->isGenerateI2L();
+      lengthByteNode = createI2LIfNecessary(comp, longOffsets, lengthByteNode);
+      if (elementSize > 1)
+         {
+         TR::Node *elementSizeNode = NULL;
+         if (longOffsets)
+            elementSizeNode = TR::Node::lconst(inStoreNode, elementSize);
+         else
+            elementSizeNode = TR::Node::iconst(inStoreNode, elementSize);
+
+         lengthByteNode = TR::Node::create(
+            longOffsets ? TR::lmul : TR::imul,
+            2,
+            lengthByteNode,
+            elementSizeNode);
+         }
+
+      TR::Block *headBlock = block;
+      TR::Block *case1Block = TR::Block::createEmptyBlock(comp);
+      TR::Block *case2Block = TR::Block::createEmptyBlock(comp);
+      TR::Block *case3Block = TR::Block::createEmptyBlock(comp);
+      TR::Block *case4Block = TR::Block::createEmptyBlock(comp);
+      TR::Block *check1Before2Block = TR::Block::createEmptyBlock(comp);
+      TR::Block *check2In1Block = TR::Block::createEmptyBlock(comp);
+      TR::Block *check1After2Block = TR::Block::createEmptyBlock(comp);
+      TR::Block *tailBlock = TR::Block::createEmptyBlock(comp);
+
+      cfg->addNode(tailBlock);
+      cfg->insertBefore(case1Block, tailBlock);
+      cfg->insertBefore(case2Block, tailBlock);
+      cfg->insertBefore(check1After2Block, case3Block);
+      cfg->join(headBlock, case1Block);
+      cfg->insertBefore(case3Block, case1Block);
+      cfg->insertBefore(case4Block, case1Block);
+      cfg->insertBefore(check1Before2Block, check1After2Block);
+      cfg->insertBefore(check2In1Block, case4Block);
+
+      TR::Node *ifNode = TR::Node::createif(TR::ifacmpne, output1Node, output2Node, check2GreaterBlock->getEntry());
+      TR::TreeTop *newTreeTop = TR::TreeTop::create(comp, ifNode);
+      trTreeTop->join(newTreeTop);
+
+      trTreeTop = check1Before2Block->getEntry();
+      ifNode = TR::Node::createif(TR::ifacmplt, output1Node, output2Node, check2In1Block->getEntry());
+      newTreeTop = TR::TreeTop::create(comp, ifNode);
+      trTreeTop->join(newTreeTop);
+
+      trTreeTop = check2In1Block->getEntry();
+      TR::Node *output1EndNode = TR::Node::create(longOffsets ? TR::aladd : TR::aiadd, 2, output1Node, lengthNode);
+      ifNode = TR::Node::createif(TR::ifacmplt, output2Node, output1EndNode, case2Block->getEntry());
+      newTreeTop = TR::TreeTop::create(comp, ifNode);
+      trTreeTop->join(newTreeTop);
+
+      trTreeTop = check1After2Block->getEntry();
+      TR::Node *output2EndNode = TR::Node::create(longOffsets ? TR::aladd : TR::aiadd, 2, output2Node, lengthNode);
+      ifNode = TR::Node::createif(TR::ifacmpge, output1Node, output2EndNode);
+      newTreeTop = TR::TreeTop::create(comp, ifNode);
+      trTreeTop->join(newTreeTop);
+
+      trTreeTop = case2Block->getEntry();
+      TR::Node *arraysetNode = TR::Node::create(TR::arrayset, 3, output1Node, value1Node, lengthNode);
+      arraysetNode->setSymbolReference(arraysetSymRef);
+      newTreeTop = TR::TreeTop::create(comp, arraysetNode);
+      trTreeTop->join(newTreeTop);
+      trTreeTop = newTreeTop;
+      TR::Node *tailNode = TR::Node::create(TR::asub, 2, output2Node, output1Node);
+      arraysetNode = TR::node::create(TR::arrayset, 3, output1EndNode, value2Node, tailNode);
+      arraysetNode->setSymbolReference(arraysetSymRef);
+      newTreeTop = TR::TreeTop::create(comp, arraysetNode);
+      trTreeTop->join(newTreeTop);
+      trTreeTop = newTreeTop;
+      TR::Node *gotoNode = TR::Node::create(TR::Goto, 0, tailBlock->getEntry());
+      newTreeTop = TR::TreeTop::create(comp, gotoNode);
+      trTreeTop->join(newTreeTop);
+
+      trTreeTop = case4Block->getEntry();
+      arraysetNode = TR::Node::create(TR::arrayset, 3, output1Node, value1Node, lengthNode);
+      arraysetNode->setSymbolReference(arraysetSymRef);
+      newTreeTop = TR::TreeTop::create(comp, arraysetNode);
+      trTreeTop->join(newTreeTop);
+      trTreeTop = newTreeTop;
+      TR::Node *gotoNode = TR::Node::create(TR::Goto, 0, case1Block->getEntry());
+      newTreeTop = TR::TreeTop::create(comp, gotoNode);
+      trTreeTop->join(newTreeTop);
+
+      trTreeTop = case3Block->getEntry();
+      tailNode = TR::Node::create(TR::asub, 2, output1Node, output2Node);
+      arraysetNode = TR::node::create(TR::arrayset, 3, output2EndNode, value1Node, tailNode);
+      arraysetNode->setSymbolReference(arraysetSymRef);
+      newTreeTop = TR::TreeTop::create(comp, arraysetNode);
+      trTreeTop->join(newTreeTop);
+      trTreeTop = newTreeTop;
+      TR::Node *gotoNode = TR::Node::create(TR::Goto, 0, case1Block->getEntry());
+      newTreeTop = TR::TreeTop::create(comp, gotoNode);
+      trTreeTop->join(newTreeTop);
+
+      trTreeTop = case1Block->getEntry();
+      arraysetNode = TR::Node::create(TR::arrayset, 3, output2Node, value2Node, lengthNode);
+      arraysetNode->setSymbolReference(arraysetSymRef);
+      newTreeTop = TR::TreeTop::create(comp, arraysetNode);
+      trTreeTop->join(newTreeTop);
+      trTreeTop = newTreeTop;
+      TR::Node *gotoNode = TR::Node::create(TR::Goto, 0, tailBlock->getEntry());
+      newTreeTop = TR::TreeTop::create(comp, gotoNode);
+      trTreeTop->join(newTreeTop);
+
+      trTreeTop = tailBlock->getEntry();
+      return true;
+      }
+   else if (store1Ascending && !store2Ascending)
+      {
+      return false;
+      }
+   else if (!store1Ascending && store2Ascending)
+      {
+      return false;
+      }
+   else // both descending
+      {
+      return false;
+      }
+
+   return false;
+   }
+
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
@@ -8110,7 +8626,9 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
    if (disptrace)
       traceMsg(comp,"Examining exit comparison CICS node %d, and determined required length modifier to be: %d\n", cmpIfAllCISCNode->getID(), lengthMod);
 
-   TR_ScratchList<TR::Node> listStores(comp->trMemory());
+   TR::Node *inStoreNode1 = NULL;
+   TR::Node *inStoreNode2 = NULL;
+
    ListAppender<TR::Node> appenderListStores(&listStores);
    ListIterator<TR_CISCNode> ni(trans->getP2T() + P->getImportantNode(0)->getID());
    TR_CISCNode *inStoreCISCNode;
@@ -8136,9 +8654,27 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
             return false;
             }
          appenderListStores.add(inStoreNode);
+         if (inStoreNode1 == NULL)
+            {
+            inStoreNode1 = inStoreNode;
+            }
+         else if (inStoreNode2 == NULL)
+            {
+            inStoreNode2 = inStoreNode;
+            }
+         else
+            {
+            dumpOptDetails(comp, "Bailing CISCTransform2ArraySet as 3+ array stores are found in the loop.\n");
+            return false;
+            }
          }
       }
-   if (listStores.isEmpty()) return false;
+
+   if (inStoreNode1 == NULL)
+      {
+      dumpOptDetails(comp, "Bailing CISCTransform2ArraySet as no array stores are found in the loop.\n");
+      return false;
+      }
 
    TR::Node *indexRepNode, *index1RepNode, *dstBaseRepNode, *variableORconstRepNode1;
    getP2TTrRepNodes(trans, &indexRepNode, &index1RepNode, &dstBaseRepNode, &variableORconstRepNode1);
@@ -8155,7 +8691,7 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
    if (indexVarSymRef != indexVar1SymRef)
       {
       // there are two induction variables
-      if (!listStores.isSingleton())
+      if (inStoreNode2 != NULL)
          {
          dumpOptDetails(comp, "Multiple induction variables with multiple stores not supported for arrayset transformation.\n");
          return false;
@@ -8171,224 +8707,26 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
          }
       }
 
-   //
-   // analyze each store
-   //
-   ListIterator<TR::Node> iteratorStores(&listStores);
-   TR::Node * indexNode = createLoad(indexRepNode);
-
-   // check if the induction variable
-   // is being stored into the array
-   for (inStoreNode = iteratorStores.getFirst(); inStoreNode; inStoreNode = iteratorStores.getNext())
+   TR::TreeTop *last = NULL;
+   TR::Node *computeIndex = NULL;
+   TR::Node *lengthNode = NULL;
+   if (inStoreNode2 == NULL)
       {
-      TR::Node * valueNode = inStoreNode->getChild(1);
-      if (valueNode->getOpCode().isLoadDirect() && valueNode->getOpCode().hasSymbolReference())
+      if (!tryTransformSingleArraySet(comp, inStoreNode1, indexRepNode, index1RepNode, trTreeTop,
+                                      dstBaseRepNode, variableORconstRepNode1, indexVarSymRef, indexVar1SymRef,
+                                      isIncrement0, isIncrement1, lengthMod, computeIndex, lengthNode))
          {
-         if (valueNode->getSymbolReference()->getReferenceNumber() == indexNode->getSymbolReference()->getReferenceNumber() ||
-             valueNode->getSymbolReference()->getReferenceNumber() == index1RepNode->getSymbolReference()->getReferenceNumber())
-            {
-            traceMsg(comp, "arraystore tree has induction variable on rhs\n");
-            return false;
-            }
+         return false;
          }
       }
-
-   List<TR::Node> listArraySet(comp->trMemory());
-   TR::Node * computeIndex = NULL;
-   TR::Node * lengthNode = NULL;
-   TR::Node * lengthByteNode = NULL;
-
-   for (inStoreNode = iteratorStores.getFirst(); inStoreNode; inStoreNode = iteratorStores.getNext())
+   else
       {
-      TR::Node * outputNode = inStoreNode->getChild(0)->duplicateTree();
-      TR::Node * valueNode = convertStoreToLoad(comp, inStoreNode->getChild(1));
-
-      uint32_t elementSize = 0;
-      if (inStoreNode->getType().isAddress())
-         elementSize = TR::Compiler->om.sizeofReferenceField();
-      else
-         elementSize = inStoreNode->getSize();
-
-      // Depending on the induction variable used in the loop, determine if it's count up or count down.
-      bool loopIsIncrement = false;
-      if (findAndOrReplaceNodesWithMatchingSymRefNumber(outputNode->getSecondChild(), NULL, indexVarSymRef->getReferenceNumber()))
+      if (!tryTransformDoubleArraySet(comp, inStoreNode1, inStoreNode2, indexRepNode, index1RepNode, trTreeTop,
+                                      dstBaseRepNode, variableORconstRepNode1, indexVarSymRef, indexVar1SymRef,
+                                      isIncrement0, isIncrement1, lengthMod, computeIndex, lengthNode))
          {
-         loopIsIncrement = isIncrement0;
+            return false;
          }
-      else
-         {
-         TR_ASSERT(findAndOrReplaceNodesWithMatchingSymRefNumber(outputNode->getSecondChild(), NULL, indexVar1SymRef->getReferenceNumber()), "Unable to find matching array access induction variable.\n");
-         loopIsIncrement = isIncrement1;
-         }
-
-      if (!loopIsIncrement)    // count-down loop
-         {
-         // This case covers a backwards counting loops of the following general forms:
-
-         //  A)  Induction variable update BEFORE the array store.
-         //    i = i_init;
-         //    do {
-         //        i--;
-         //        a [i + c] = d;
-         //    } while ( i >= i_last );
-         //
-         //  B)  Induction variable update AFTER the array store.
-         //    i = i_init;
-         //    do {
-         //        a [i + c] = d;
-         //        i--;
-         //    } while ( i >= i_last );
-         //
-         // The loops can be transformed into an equivalent forward counting loop:
-         //    i = i_last';
-         //    do {
-         //       a [i + c] = d;
-         //       i++;
-         //    } while (i <= i_init')
-         //
-         // Where:
-         //    A)  Induction variable update BEFORE the array store.
-         //      i_init' = i_init - 1
-         //      i_last' = i_last - 1
-         //    B)  Induction variable update AFTER the array store.
-         //      i_init' = i_init
-         //      i_last' = i_last
-         //
-         // This forward version can be reduced to an arrayset
-         //     arrayset
-         //          a[i_last' + c]         // Address of first element to set (forward sense)
-         //          bconst d              // Element to set.
-         //          i_init - i_last (+1)  // Length
-         // Calculate the last value of the induction variable in the original count-down loop.
-         // This value becomes the index of the first element in the count-up version, and hence
-         // the first element of the arrayset.
-
-       	 TR::Node * lastValueNode = convertStoreToLoad(comp, variableORconstRepNode1);
-
-         // Determine if the induction variable update is before the arrayset
-         bool isIndexVarUpdateBeforeArrayset = (trans->findStoreToSymRefInInsertBeforeNodes(indexVarSymRef->getReferenceNumber()) != NULL);
-
-         // Adjust for the index based on exit condition (i.e. > vs >= ) and whether the induction
-         // variable update is before/after the array stores.
-         //   i_last':             > (lengthMod=0)     >= (lengthMod=1)
-         //                        ---------------     ----------------
-         //            Before         i_last               i_last - 1
-         //            After          i_last + 1           i_last
-         int32_t lastLegalValueAdjustment = -lengthMod;
-         if (!isIndexVarUpdateBeforeArrayset)
-            lastLegalValueAdjustment++;
-
-         // If the induction variable update is before the arrayset, we need to validate whether the array access
-         // commoned the node with the iadd/isub of the induction variable.  i.e.
-         //
-         // istore #indvar
-         //    iadd (A)
-         //        iload #indvar (B)
-         //        iconst -1
-         // istore
-         //    aiadd
-         //        aload arraybase
-         //        aiadd
-         //            index
-         //            iconst array_header_size
-         //
-         // where index could be:
-         //   (A) commoned to iadd, effectively using new value of #indvar
-         //   (B) commoned to iload, effectively using old value of #indvar
-         //   (C) a new iload using new value of #indvar
-         //
-         //  Case (A) is problematic, as the induction variable store is still before the arrayset, but
-         //  the array access pattern is using the original value of #indvar.
-         //  Case (B) is okay, in that topological embedding will recognize that to be equivalent to
-         //  updating induction variable after the arraystore.
-         //  Case (C) is handled correctly.
-         int32_t arrayStoreCommoningAdjustment = 0;
-         if (isIndexVarUpdateBeforeArrayset)
-            {
-            TR::Node *origIndVarStore = ivStoreCISCNode->getHeadOfTrNodeInfo()->_node;
-            TR::Node *origIndVarLoad = origIndVarStore->getChild(0)->getChild(0);
-
-            TR::Node *origArrayIndVarLoad = findLoadWithMatchingSymRefNumber(inStoreNode->getChild(0)->getSecondChild(), indexVarSymRef->getReferenceNumber());
-
-            // If they match, we have case (B), so we need to readjust by +1.
-            if (origIndVarLoad == origArrayIndVarLoad)
-               {
-               traceMsg(comp, "Identified array index to have been referencing original induction variable value: %p\n",origIndVarLoad);
-               arrayStoreCommoningAdjustment = 1;
-               }
-            }
-
-         TR::Node *lastLegalValue = createOP2(comp, TR::iadd, lastValueNode,
-                                   TR::Node::create(indexNode, TR::iconst, 0, lastLegalValueAdjustment + arrayStoreCommoningAdjustment));
-
-         // Search for the induction variable in the array access sub-tree and replace that node
-         // with the last value index we just calculated.
-         bool isFound = findAndOrReplaceNodesWithMatchingSymRefNumber(outputNode->getSecondChild(), lastLegalValue, indexVarSymRef->getReferenceNumber());
-         if (!isFound && (indexVarSymRef != indexVar1SymRef))
-             isFound = findAndOrReplaceNodesWithMatchingSymRefNumber(outputNode->getSecondChild(), lastLegalValue, indexVar1SymRef->getReferenceNumber());
-
-         TR_ASSERT(isFound, "Count down arrayset was unable to find and replace array access induction variable.\n");
-
-         // Determine the length of the arrayset (# of elements to set) and adjusting it based on exit condition.
-         // In the case of the induction variable update is before the array store, the indexNode value has already been
-         // decremented by 1 once already (since i--; is inserted before the final arrayset.  We need to readjust that.
-         //   length:             > (lengthMod=0)          >= (lengthMod=1)
-         //                        ---------------           ----------------
-         //            Before     i_init - i_last + 1         i_init - i_last +2
-         //            After      i_init - i_last             i_init - i_last +1
-         int32_t lengthAdjustment = lengthMod + ((isIndexVarUpdateBeforeArrayset)?1:0);
-
-         lengthNode = createOP2(comp, TR::isub, indexNode, lastValueNode);
-         lengthNode = createOP2(comp, TR::iadd, lengthNode, TR::Node::create(indexNode, TR::iconst, 0, lengthAdjustment));
-
-         // Determine the final induction variable value on loop exit.
-         // If the induction variable update is before the arrayset,
-         //    it will be the last value we access.
-         // If the induction variable update is after the arrayset,
-         //    it will always be one less than the last index (count-down sense) that we access.
-         computeIndex = createOP2(comp, TR::iadd, lastLegalValue, TR::Node::create(indexRepNode, TR::iconst, 0, ((isIndexVarUpdateBeforeArrayset)?0:-1) - arrayStoreCommoningAdjustment));
-
-         }
-      else      // count-up loop
-         {
-         TR::Node * lastValue = convertStoreToLoad(comp, variableORconstRepNode1);
-         lastValue = createOP2(comp, isIncrement0 ? TR::iadd : TR::isub, lastValue,
-                                  TR::Node::create(indexNode, TR::iconst, 0, lengthMod));
-
-         // Induction variable 0 is always part of the loop exit condition based on idiom graph.
-         if (isIncrement0)
-            {
-            lengthNode = createOP2(comp, TR::isub, lastValue, indexNode);
-            }
-         else
-            {
-            lengthNode = createOP2(comp, TR::isub, indexNode, lastValue);
-            }
-         computeIndex = lastValue;
-         }
-
-      lengthByteNode = lengthNode;
-      const bool longOffsets = trans->isGenerateI2L();
-      lengthByteNode = createI2LIfNecessary(comp, longOffsets, lengthByteNode);
-      if (elementSize > 1)
-         {
-         TR::Node *elementSizeNode = NULL;
-         if (longOffsets)
-            elementSizeNode = TR::Node::lconst(inStoreNode, elementSize);
-         else
-            elementSizeNode = TR::Node::iconst(inStoreNode, elementSize);
-
-         lengthByteNode = TR::Node::create(
-            longOffsets ? TR::lmul : TR::imul,
-            2,
-            lengthByteNode,
-            elementSizeNode);
-         }
-
-      TR::Node * arrayset = TR::Node::create(TR::arrayset, 3, outputNode, valueNode, lengthByteNode);
-      arrayset->setSymbolReference(comp->getSymRefTab()->findOrCreateArraySetSymbol());
-
-      listArraySet.add(TR::Node::create(TR::treetop, 1, arrayset));
       }
 
    TR::Node * indVarUpdateNode = TR::Node::createStore(indexVarSymRef, computeIndex);
@@ -8401,21 +8739,7 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
       indVar1UpdateTreeTop = TR::TreeTop::create(comp, indVar1UpdateNode);
       }
 
-   // Insert nodes and maintain the CFG
-   TR::TreeTop *last;
-   ListIterator<TR::Node> iteratorArraySet(&listArraySet);
-   TR::Node *arrayset = NULL;
-   TR_ASSERT(lengthByteNode, "Expected at least one set of arrayset.");
-   block = trans->modifyBlockByVersioningCheck(block, trTreeTop, lengthByteNode->duplicateTree());
-   block = trans->insertBeforeNodes(block);
-   last = block->getLastRealTreeTop();
-   for (arrayset = iteratorArraySet.getFirst(); arrayset; arrayset = iteratorArraySet.getNext())
-      {
-      TR::TreeTop *newTop = TR::TreeTop::create(comp, arrayset);
-      last->join(newTop);
-      last = newTop;
-      }
-   last->join(indVarUpdateTreeTop);
+   trTreeTop->join(indVarUpdateTreeTop);
    indVarUpdateTreeTop->join(block->getExit());
    if (indVar1UpdateTreeTop)
       {
