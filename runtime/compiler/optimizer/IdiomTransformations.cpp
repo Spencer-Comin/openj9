@@ -8585,9 +8585,6 @@ tryTransformDoubleArraySet(TR_CISCTransformer *trans, TR_CISCNode *ivStoreCISCNo
       trTreeTop->join(newTreeTop);
 
       trTreeTop = target->getEntry();
-      TR::Node * lastValue = convertStoreToLoad(comp, variableORconstRepNode1);
-      lastValue = createOP2(comp, isIncrement0 ? TR::iadd : TR::isub, lastValue,
-                                 TR::Node::create(indexNode, TR::iconst, 0, lengthMod));
       }
    else if (store1Ascending && !store2Ascending)
       {
