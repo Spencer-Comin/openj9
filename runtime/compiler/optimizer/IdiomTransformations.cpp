@@ -8015,10 +8015,36 @@ CISCTransform2PtrArraySet(TR_CISCTransformer *trans)
    }
 
 static bool
-tryTransformSingleArraySet(TR::Compilation *comp, TR::Node *inStoreNode, TR::Node *indexRepNode, TR::Node *index1RepNode, TR::TreeTop *&trTreeTop,
-                        TR::Node *dstBaseRepNode, TR::Node *variableORconstRepNode1, TR::SymbolReference *indexVarSymRef, TR::SymbolReference *indexVar1SymRef,
-                        bool isIncrement0, bool isIncrement1, int32_t lengthMod, TR::Node *&computeIndex, TR::Node *&lengthNode)
+tryTransformSingleArraySet(TR_CISCTransformer *trans, TR::Node *inStoreNode, bool isIncrement0, bool isIncrement1, int32_t lengthMod,
+                           TR::TreeTop *&trTreeTop, TR::Node *&computeIndex, TR::Node *&lengthNode)
    {
+   const bool disptrace = DISPTRACE(trans);
+   TR::Compilation *comp = trans->comp();
+   TR::Node *indexRepNode, *index1RepNode, *dstBaseRepNode, *variableORconstRepNode1;
+   getP2TTrRepNodes(trans, &indexRepNode, &index1RepNode, &dstBaseRepNode, &variableORconstRepNode1);
+
+   if (disptrace)
+      {
+      traceMsg(comp,"Identified target nodes\n\tindexRepNode: %p\n\tindex1RepNode: %p\n\tdstBaseRepNode: %p\n\tvariableOrconstRepNode1: %p\n",
+            indexRepNode, index1RepNode, dstBaseRepNode, variableORconstRepNode1);
+      }
+   TR::SymbolReference * indexVarSymRef = indexRepNode->getSymbolReference();
+   TR::SymbolReference * indexVar1SymRef = index1RepNode->getSymbolReference();
+   if (trans->countGoodArrayIndex(indexVarSymRef) == 0 &&
+       trans->countGoodArrayIndex(indexVar1SymRef) == 0) return false;
+   if (indexVarSymRef != indexVar1SymRef)
+      {
+      if (!isIncrement1)
+         {
+         // We do not correctly handle the second induction variable being a decrement.
+         // TODO: Things to fix include:
+         //     Proper Last Value calculation for count-down loop that uses ind var 1.
+         //     Proper length calculation for count-down loop that uses ind var 1.
+         dumpOptDetails(comp, "A decrementing second induction variable is not supported. \n");
+         return false;
+         }
+      }
+
    TR::Node * indexNode = createLoad(indexRepNode);
    TR::Node * valueNode = inStoreNode->getChild(1);
    if (valueNode->getOpCode().isLoadDirect() && valueNode->getOpCode().hasSymbolReference())
@@ -8232,10 +8258,30 @@ tryTransformSingleArraySet(TR::Compilation *comp, TR::Node *inStoreNode, TR::Nod
    }
 
 static bool
-tryTransformDoubleArraySet(TR::Compilation *comp, TR::Node *inStoreNode1, TR::Node *inStoreNode2, TR::Node *indexRepNode, TR::Node *index1RepNode, TR::TreeTop *&trTreeTop,
-                        TR::Node *dstBaseRepNode, TR::Node *variableORconstRepNode1, TR::SymbolReference * indexVarSymRef, TR::SymbolReference * indexVar1SymRef,
-                        bool isIncrement0, bool isIncrement1, int32_t lengthMod, TR::Node *&computeIndex, TR::Node *&lengthNode)
+tryTransformDoubleArraySet(TR_CISCTransformer *trans, TR::Node *inStoreNode1, TR::Node *inStoreNode2, bool isIncrement0, bool isIncrement1, int32_t lengthMod,
+                           TR::TreeTop *&trTreeTop, TR::Node *&computeIndex, TR::Node *&lengthNode)
    {
+   const bool disptrace = DISPTRACE(trans);
+   TR::Compilation *comp = trans->comp();
+   TR::Node *indexRepNode, *index1RepNode, *dstBaseRepNode, *variableORconstRepNode1;
+   getP2TTrRepNodes(trans, &indexRepNode, &index1RepNode, &dstBaseRepNode, &variableORconstRepNode1);
+
+   if (disptrace)
+      {
+      traceMsg(comp,"Identified target nodes\n\tindexRepNode: %p\n\tindex1RepNode: %p\n\tdstBaseRepNode: %p\n\tvariableOrconstRepNode1: %p\n",
+            indexRepNode, index1RepNode, dstBaseRepNode, variableORconstRepNode1);
+      }
+   TR::SymbolReference * indexVarSymRef = indexRepNode->getSymbolReference();
+   TR::SymbolReference * indexVar1SymRef = index1RepNode->getSymbolReference();
+   if (trans->countGoodArrayIndex(indexVarSymRef) == 0 &&
+       trans->countGoodArrayIndex(indexVar1SymRef) == 0) return false;
+   if (indexVarSymRef != indexVar1SymRef)
+      {
+      // there are two induction variables
+      dumpOptDetails(comp, "Multiple induction variables with multiple stores not supported for arrayset transformation.\n");
+      return false;
+      }
+
    TR::Node * indexNode = createLoad(indexRepNode);
    TR::Node * value1Node = inStoreNode1->getChild(1);
    TR::Node * value2Node = inStoreNode2->getChild(1);
@@ -8303,7 +8349,7 @@ tryTransformDoubleArraySet(TR::Compilation *comp, TR::Node *inStoreNode1, TR::No
    block = trans->insertBeforeNodes(block);
    trTreeTop = block->getLastRealTreeTop();
 
-   const TR::SymbolReference *arraysetSymRef = comp->getSymRefTab()->findOrCreateArraySetSymbol();
+   TR::SymbolReference *arraysetSymRef = comp->getSymRefTab()->findOrCreateArraySetSymbol();
 
    if (store1Ascending && store2Ascending)
       {
@@ -8676,54 +8722,21 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
       return false;
       }
 
-   TR::Node *indexRepNode, *index1RepNode, *dstBaseRepNode, *variableORconstRepNode1;
-   getP2TTrRepNodes(trans, &indexRepNode, &index1RepNode, &dstBaseRepNode, &variableORconstRepNode1);
-
-   if (disptrace)
-      {
-      traceMsg(comp,"Identified target nodes\n\tindexRepNode: %p\n\tindex1RepNode: %p\n\tdstBaseRepNode: %p\n\tvariableOrconstRepNode1: %p\n",
-            indexRepNode, index1RepNode, dstBaseRepNode, variableORconstRepNode1);
-      }
-   TR::SymbolReference * indexVarSymRef = indexRepNode->getSymbolReference();
-   TR::SymbolReference * indexVar1SymRef = index1RepNode->getSymbolReference();
-   if (trans->countGoodArrayIndex(indexVarSymRef) == 0 &&
-       trans->countGoodArrayIndex(indexVar1SymRef) == 0) return false;
-   if (indexVarSymRef != indexVar1SymRef)
-      {
-      // there are two induction variables
-      if (inStoreNode2 != NULL)
-         {
-         dumpOptDetails(comp, "Multiple induction variables with multiple stores not supported for arrayset transformation.\n");
-         return false;
-         }
-      if (!isIncrement1)
-         {
-         // We do not correctly handle the second induction variable being a decrement.
-         // TODO: Things to fix include:
-         //     Proper Last Value calculation for count-down loop that uses ind var 1.
-         //     Proper length calculation for count-down loop that uses ind var 1.
-         dumpOptDetails(comp, "A decrementing second induction variable is not supported. \n");
-         return false;
-         }
-      }
-
    TR::TreeTop *last = NULL;
    TR::Node *computeIndex = NULL;
    TR::Node *lengthNode = NULL;
    if (inStoreNode2 == NULL)
       {
-      if (!tryTransformSingleArraySet(comp, inStoreNode1, indexRepNode, index1RepNode, trTreeTop,
-                                      dstBaseRepNode, variableORconstRepNode1, indexVarSymRef, indexVar1SymRef,
-                                      isIncrement0, isIncrement1, lengthMod, computeIndex, lengthNode))
+      if (!tryTransformSingleArraySet(trans, inStoreNode1,
+                                      isIncrement0, isIncrement1, lengthMod, trTreeTop, computeIndex, lengthNode))
          {
          return false;
          }
       }
    else
       {
-      if (!tryTransformDoubleArraySet(comp, inStoreNode1, inStoreNode2, indexRepNode, index1RepNode, trTreeTop,
-                                      dstBaseRepNode, variableORconstRepNode1, indexVarSymRef, indexVar1SymRef,
-                                      isIncrement0, isIncrement1, lengthMod, computeIndex, lengthNode))
+      if (!tryTransformDoubleArraySet(trans, inStoreNode1, inStoreNode2,
+                                      isIncrement0, isIncrement1, lengthMod, trTreeTop, computeIndex, lengthNode))
          {
             return false;
          }
