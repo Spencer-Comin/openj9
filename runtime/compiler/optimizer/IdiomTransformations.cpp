@@ -8016,7 +8016,7 @@ CISCTransform2PtrArraySet(TR_CISCTransformer *trans)
 
 static bool
 tryTransformSingleArraySet(TR_CISCTransformer *trans, TR_CISCNode *ivStoreCISCNode, TR::Block *target, TR::TreeTop *trTreeTop,
-                           TR::Node *inStoreNode, bool isIncrement0, bool isIncrement1, int32_t lengthMod)
+                           TR::Node *trNode, TR::Node *inStoreNode, bool isIncrement0, bool isIncrement1, int32_t lengthMod)
    {
    const bool disptrace = DISPTRACE(trans);
    TR::Compilation *comp = trans->comp();
@@ -8283,7 +8283,7 @@ tryTransformSingleArraySet(TR_CISCTransformer *trans, TR_CISCNode *ivStoreCISCNo
 
 static bool
 tryTransformDoubleArraySet(TR_CISCTransformer *trans, TR_CISCNode *ivStoreCISCNode, TR::Block *target, TR::TreeTop *trTreeTop,
-                           TR::Node *inStoreNode1, TR::Node *inStoreNode2, bool isIncrement0, bool isIncrement1, int32_t lengthMod)
+                           TR::Node *trNode, TR::Node *inStoreNode1, TR::Node *inStoreNode2, bool isIncrement0, bool isIncrement1, int32_t lengthMod)
    {
    const bool disptrace = DISPTRACE(trans);
    TR::Compilation *comp = trans->comp();
@@ -8373,6 +8373,8 @@ tryTransformDoubleArraySet(TR_CISCTransformer *trans, TR_CISCNode *ivStoreCISCNo
    TR::SymbolReference *arraysetSymRef = comp->getSymRefTab()->findOrCreateArraySetSymbol();
 
    TR::Block *block =  NULL;
+   TR::Node *lengthNode = NULL;
+   TR::Node *computeIndex = NULL;
 
    if (store1Ascending && store2Ascending)
       {
@@ -8463,7 +8465,6 @@ tryTransformDoubleArraySet(TR_CISCTransformer *trans, TR_CISCNode *ivStoreCISCNo
       TR::Node *lastValue = createOP2(comp, isIncrement0 ? TR::iadd : TR::isub,
                                        convertStoreToLoad(comp, variableORconstRepNode1),
                                        TR::Node::iconst(indexNode, lengthMod));
-      TR::Node *lengthNode = NULL;
       // Induction variable 0 is always part of the loop exit condition based on idiom graph.
       if (isIncrement0)
          {
@@ -8473,6 +8474,7 @@ tryTransformDoubleArraySet(TR_CISCTransformer *trans, TR_CISCNode *ivStoreCISCNo
          {
          lengthNode = createOP2(comp, TR::isub, indexNode, lastValue);
          }
+      computeIndex = lastValue;
 
       TR::Node *lengthByteNode = lengthNode;
       const bool longOffsets = trans->isGenerateI2L();
@@ -8563,7 +8565,7 @@ tryTransformDoubleArraySet(TR_CISCTransformer *trans, TR_CISCNode *ivStoreCISCNo
 
       trTreeTop = case3Block->getEntry();
       tailNode = TR::Node::create(TR::asub, 2, output1Node, output2Node);
-      arraysetNode = TR::node::create(TR::arrayset, 3, output2EndNode, value1Node, tailNode);
+      arraysetNode = TR::Node::create(TR::arrayset, 3, output2EndNode, value1Node, tailNode);
       arraysetNode->setSymbolReference(arraysetSymRef);
       newTreeTop = TR::TreeTop::create(comp, arraysetNode);
       trTreeTop->join(newTreeTop);
@@ -8583,6 +8585,9 @@ tryTransformDoubleArraySet(TR_CISCTransformer *trans, TR_CISCNode *ivStoreCISCNo
       trTreeTop->join(newTreeTop);
 
       trTreeTop = target->getEntry();
+      TR::Node * lastValue = convertStoreToLoad(comp, variableORconstRepNode1);
+      lastValue = createOP2(comp, isIncrement0 ? TR::iadd : TR::isub, lastValue,
+                                 TR::Node::create(indexNode, TR::iconst, 0, lengthMod));
       }
    else if (store1Ascending && !store2Ascending)
       {
@@ -8768,12 +8773,12 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
    if (inStoreNode2 == NULL)
       {
       return tryTransformSingleArraySet(trans, ivStoreCISCNode, target, trTreeTop,
-                                        inStoreNode1, isIncrement0, isIncrement1, lengthMod);
+                                        trNode, inStoreNode1, isIncrement0, isIncrement1, lengthMod);
       }
    else
       {
       return tryTransformDoubleArraySet(trans, ivStoreCISCNode, target, trTreeTop,
-                                        inStoreNode1, inStoreNode2, isIncrement0, isIncrement1, lengthMod);
+                                        trNode, inStoreNode1, inStoreNode2, isIncrement0, isIncrement1, lengthMod);
       }
    }
 
