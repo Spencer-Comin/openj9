@@ -8015,8 +8015,8 @@ CISCTransform2PtrArraySet(TR_CISCTransformer *trans)
    }
 
 static bool
-tryTransformSingleArraySet(TR_CISCTransformer *trans, TR::Node *inStoreNode, bool isIncrement0, bool isIncrement1, int32_t lengthMod,
-                           TR::TreeTop *&trTreeTop, TR::Node *&computeIndex, TR::Node *&lengthNode)
+tryTransformSingleArraySet(TR_CISCTransformer *trans, TR_CISCNode *ivStoreCISCNode, TR::Block *target, TR::TreeTop *trTreeTop,
+                           TR::Node *inStoreNode, bool isIncrement0, bool isIncrement1, int32_t lengthMod)
    {
    const bool disptrace = DISPTRACE(trans);
    TR::Compilation *comp = trans->comp();
@@ -8080,7 +8080,9 @@ tryTransformSingleArraySet(TR_CISCTransformer *trans, TR::Node *inStoreNode, boo
       loopIsIncrement = isIncrement1;
       }
 
-   if (!loopIsIncrement)    // count-down loop
+   TR::Node *computeIndex, *lengthNode;
+
+   if (!loopIsIncrement) // count-down loop
       {
       // This case covers a backwards counting loops of the following general forms:
 
@@ -8254,12 +8256,34 @@ tryTransformSingleArraySet(TR_CISCTransformer *trans, TR::Node *inStoreNode, boo
    TR::TreeTop *last = block->getLastRealTreeTop();
    trTreeTop = TR::TreeTop::create(comp, arrayset);
    last->join(trTreeTop);
+
+   TR::Node * indVarUpdateNode = TR::Node::createStore(indexVarSymRef, computeIndex);
+   TR::TreeTop * indVarUpdateTreeTop = TR::TreeTop::create(comp, indVarUpdateNode);
+   TR::Node * indVar1UpdateNode = NULL;
+   TR::TreeTop * indVar1UpdateTreeTop = NULL;
+   if (indexVarSymRef != indexVar1SymRef)
+      {
+      indVar1UpdateNode = createStoreOP2(comp, indexVar1SymRef, TR::iadd, indexVar1SymRef, lengthNode, trNode);
+      indVar1UpdateTreeTop = TR::TreeTop::create(comp, indVar1UpdateNode);
+      }
+
+   trTreeTop->join(indVarUpdateTreeTop);
+   indVarUpdateTreeTop->join(block->getExit());
+   if (indVar1UpdateTreeTop)
+      {
+      block->append(indVar1UpdateTreeTop);
+      }
+
+   trans->insertAfterNodes(block);
+
+   trans->setSuccessorEdge(block, target);
+
    return true;
    }
 
 static bool
-tryTransformDoubleArraySet(TR_CISCTransformer *trans, TR::Node *inStoreNode1, TR::Node *inStoreNode2, bool isIncrement0, bool isIncrement1, int32_t lengthMod,
-                           TR::TreeTop *&trTreeTop, TR::Node *&computeIndex, TR::Node *&lengthNode)
+tryTransformDoubleArraySet(TR_CISCTransformer *trans, TR_CISCNode *ivStoreCISCNode, TR::Block *target, TR::TreeTop *trTreeTop,
+                           TR::Node *inStoreNode1, TR::Node *inStoreNode2, bool isIncrement0, bool isIncrement1, int32_t lengthMod)
    {
    const bool disptrace = DISPTRACE(trans);
    TR::Compilation *comp = trans->comp();
@@ -8345,11 +8369,10 @@ tryTransformDoubleArraySet(TR_CISCTransformer *trans, TR::Node *inStoreNode1, TR
       }
 
    TR::CFG *cfg = comp->getFlowGraph();
-   TR::Block *block = trans->modifyBlockByVersioningCheck(block, trTreeTop, lengthByteNode->duplicateTree());
-   block = trans->insertBeforeNodes(block);
-   trTreeTop = block->getLastRealTreeTop();
 
    TR::SymbolReference *arraysetSymRef = comp->getSymRefTab()->findOrCreateArraySetSymbol();
+
+   TR::Block *block =  NULL;
 
    if (store1Ascending && store2Ascending)
       {
@@ -8458,9 +8481,9 @@ tryTransformDoubleArraySet(TR_CISCTransformer *trans, TR::Node *inStoreNode1, TR
          {
          TR::Node *elementSizeNode = NULL;
          if (longOffsets)
-            elementSizeNode = TR::Node::lconst(inStoreNode, elementSize);
+            elementSizeNode = TR::Node::lconst(inStoreNode1, elementSize);
          else
-            elementSizeNode = TR::Node::iconst(inStoreNode, elementSize);
+            elementSizeNode = TR::Node::iconst(inStoreNode1, elementSize);
 
          lengthByteNode = TR::Node::create(
             longOffsets ? TR::lmul : TR::imul,
@@ -8468,6 +8491,10 @@ tryTransformDoubleArraySet(TR_CISCTransformer *trans, TR::Node *inStoreNode1, TR
             lengthByteNode,
             elementSizeNode);
          }
+
+      block = trans->modifyBlockByVersioningCheck(block, trTreeTop, lengthByteNode->duplicateTree());
+      block = trans->insertBeforeNodes(block);
+      trTreeTop = block->getLastRealTreeTop();
 
       TR::Block *headBlock = block;
       TR::Block *case1Block = TR::Block::createEmptyBlock(comp);
@@ -8477,11 +8504,9 @@ tryTransformDoubleArraySet(TR_CISCTransformer *trans, TR::Node *inStoreNode1, TR
       TR::Block *check1Before2Block = TR::Block::createEmptyBlock(comp);
       TR::Block *check2In1Block = TR::Block::createEmptyBlock(comp);
       TR::Block *check1After2Block = TR::Block::createEmptyBlock(comp);
-      TR::Block *tailBlock = TR::Block::createEmptyBlock(comp);
 
-      cfg->addNode(tailBlock);
-      cfg->insertBefore(case1Block, tailBlock);
-      cfg->insertBefore(case2Block, tailBlock);
+      cfg->insertBefore(case1Block, target);
+      cfg->insertBefore(case2Block, target);
       cfg->insertBefore(check1After2Block, case3Block);
       cfg->join(headBlock, case1Block);
       cfg->insertBefore(case3Block, case1Block);
@@ -8489,7 +8514,7 @@ tryTransformDoubleArraySet(TR_CISCTransformer *trans, TR::Node *inStoreNode1, TR
       cfg->insertBefore(check1Before2Block, check1After2Block);
       cfg->insertBefore(check2In1Block, case4Block);
 
-      TR::Node *ifNode = TR::Node::createif(TR::ifacmpne, output1Node, output2Node, check2GreaterBlock->getEntry());
+      TR::Node *ifNode = TR::Node::createif(TR::ifacmpne, output1Node, output2Node, check1Before2Block->getEntry());
       TR::TreeTop *newTreeTop = TR::TreeTop::create(comp, ifNode);
       trTreeTop->join(newTreeTop);
 
@@ -8517,12 +8542,12 @@ tryTransformDoubleArraySet(TR_CISCTransformer *trans, TR::Node *inStoreNode1, TR
       trTreeTop->join(newTreeTop);
       trTreeTop = newTreeTop;
       TR::Node *tailNode = TR::Node::create(TR::asub, 2, output2Node, output1Node);
-      arraysetNode = TR::node::create(TR::arrayset, 3, output1EndNode, value2Node, tailNode);
+      arraysetNode = TR::Node::create(TR::arrayset, 3, output1EndNode, value2Node, tailNode);
       arraysetNode->setSymbolReference(arraysetSymRef);
       newTreeTop = TR::TreeTop::create(comp, arraysetNode);
       trTreeTop->join(newTreeTop);
       trTreeTop = newTreeTop;
-      TR::Node *gotoNode = TR::Node::create(TR::Goto, 0, tailBlock->getEntry());
+      TR::Node *gotoNode = TR::Node::create(TR::Goto, 0, target->getEntry());
       newTreeTop = TR::TreeTop::create(comp, gotoNode);
       trTreeTop->join(newTreeTop);
 
@@ -8532,7 +8557,7 @@ tryTransformDoubleArraySet(TR_CISCTransformer *trans, TR::Node *inStoreNode1, TR
       newTreeTop = TR::TreeTop::create(comp, arraysetNode);
       trTreeTop->join(newTreeTop);
       trTreeTop = newTreeTop;
-      TR::Node *gotoNode = TR::Node::create(TR::Goto, 0, case1Block->getEntry());
+      gotoNode = TR::Node::create(TR::Goto, 0, case1Block->getEntry());
       newTreeTop = TR::TreeTop::create(comp, gotoNode);
       trTreeTop->join(newTreeTop);
 
@@ -8543,7 +8568,7 @@ tryTransformDoubleArraySet(TR_CISCTransformer *trans, TR::Node *inStoreNode1, TR
       newTreeTop = TR::TreeTop::create(comp, arraysetNode);
       trTreeTop->join(newTreeTop);
       trTreeTop = newTreeTop;
-      TR::Node *gotoNode = TR::Node::create(TR::Goto, 0, case1Block->getEntry());
+      gotoNode = TR::Node::create(TR::Goto, 0, case1Block->getEntry());
       newTreeTop = TR::TreeTop::create(comp, gotoNode);
       trTreeTop->join(newTreeTop);
 
@@ -8553,12 +8578,11 @@ tryTransformDoubleArraySet(TR_CISCTransformer *trans, TR::Node *inStoreNode1, TR
       newTreeTop = TR::TreeTop::create(comp, arraysetNode);
       trTreeTop->join(newTreeTop);
       trTreeTop = newTreeTop;
-      TR::Node *gotoNode = TR::Node::create(TR::Goto, 0, tailBlock->getEntry());
+      gotoNode = TR::Node::create(TR::Goto, 0, target->getEntry());
       newTreeTop = TR::TreeTop::create(comp, gotoNode);
       trTreeTop->join(newTreeTop);
 
-      trTreeTop = tailBlock->getEntry();
-      return true;
+      trTreeTop = target->getEntry();
       }
    else if (store1Ascending && !store2Ascending)
       {
@@ -8573,7 +8597,28 @@ tryTransformDoubleArraySet(TR_CISCTransformer *trans, TR::Node *inStoreNode1, TR
       return false;
       }
 
-   return false;
+   TR::Node * indVarUpdateNode = TR::Node::createStore(indexVarSymRef, computeIndex);
+   TR::TreeTop * indVarUpdateTreeTop = TR::TreeTop::create(comp, indVarUpdateNode);
+   TR::Node * indVar1UpdateNode = NULL;
+   TR::TreeTop * indVar1UpdateTreeTop = NULL;
+   if (indexVarSymRef != indexVar1SymRef)
+      {
+      indVar1UpdateNode = createStoreOP2(comp, indexVar1SymRef, TR::iadd, indexVar1SymRef, lengthNode, trNode);
+      indVar1UpdateTreeTop = TR::TreeTop::create(comp, indVar1UpdateNode);
+      }
+
+   trTreeTop->join(indVarUpdateTreeTop);
+   indVarUpdateTreeTop->join(block->getExit());
+   if (indVar1UpdateTreeTop)
+      {
+      block->append(indVar1UpdateTreeTop);
+      }
+
+   trans->insertAfterNodes(block);
+
+   trans->setSuccessorEdge(block, target);
+
+   return true;
    }
 
 //////////////////////////////////////////////////////////////////////////
@@ -8675,7 +8720,6 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
    TR::Node *inStoreNode1 = NULL;
    TR::Node *inStoreNode2 = NULL;
 
-   ListAppender<TR::Node> appenderListStores(&listStores);
    ListIterator<TR_CISCNode> ni(trans->getP2T() + P->getImportantNode(0)->getID());
    TR_CISCNode *inStoreCISCNode;
    TR::Node *inStoreNode;
@@ -8699,7 +8743,6 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
             dumpOptDetails(comp, "the cg only supports arrayset to zero, but found a non-zero or non-constant value\n");
             return false;
             }
-         appenderListStores.add(inStoreNode);
          if (inStoreNode1 == NULL)
             {
             inStoreNode1 = inStoreNode;
@@ -8722,47 +8765,16 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
       return false;
       }
 
-   TR::TreeTop *last = NULL;
-   TR::Node *computeIndex = NULL;
-   TR::Node *lengthNode = NULL;
    if (inStoreNode2 == NULL)
       {
-      if (!tryTransformSingleArraySet(trans, inStoreNode1,
-                                      isIncrement0, isIncrement1, lengthMod, trTreeTop, computeIndex, lengthNode))
-         {
-         return false;
-         }
+      return tryTransformSingleArraySet(trans, ivStoreCISCNode, target, trTreeTop,
+                                        inStoreNode1, isIncrement0, isIncrement1, lengthMod);
       }
    else
       {
-      if (!tryTransformDoubleArraySet(trans, inStoreNode1, inStoreNode2,
-                                      isIncrement0, isIncrement1, lengthMod, trTreeTop, computeIndex, lengthNode))
-         {
-            return false;
-         }
+      return tryTransformDoubleArraySet(trans, ivStoreCISCNode, target, trTreeTop,
+                                        inStoreNode1, inStoreNode2, isIncrement0, isIncrement1, lengthMod);
       }
-
-   TR::Node * indVarUpdateNode = TR::Node::createStore(indexVarSymRef, computeIndex);
-   TR::TreeTop * indVarUpdateTreeTop = TR::TreeTop::create(comp, indVarUpdateNode);
-   TR::Node * indVar1UpdateNode = NULL;
-   TR::TreeTop * indVar1UpdateTreeTop = NULL;
-   if (indexVarSymRef != indexVar1SymRef)
-      {
-      indVar1UpdateNode = createStoreOP2(comp, indexVar1SymRef, TR::iadd, indexVar1SymRef, lengthNode, trNode);
-      indVar1UpdateTreeTop = TR::TreeTop::create(comp, indVar1UpdateNode);
-      }
-
-   trTreeTop->join(indVarUpdateTreeTop);
-   indVarUpdateTreeTop->join(block->getExit());
-   if (indVar1UpdateTreeTop)
-      {
-      block->append(indVar1UpdateTreeTop);
-      }
-
-   trans->insertAfterNodes(block);
-
-   trans->setSuccessorEdge(block, target);
-   return true;
    }
 
 bool CISCTransform2Strlen16(TR_CISCTransformer *trans)
