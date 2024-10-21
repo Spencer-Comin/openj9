@@ -8015,7 +8015,7 @@ CISCTransform2PtrArraySet(TR_CISCTransformer *trans)
    }
 
 static bool
-tryTransformSingleArraySet(TR_CISCTransformer *trans, TR_CISCNode *ivStoreCISCNode, TR::Block *target, TR::TreeTop *trTreeTop,
+tryTransformSingleArraySet(TR_CISCTransformer *trans, TR_CISCNode *ivStoreCISCNode, TR::Block *target, TR::Block *block, TR::TreeTop *trTreeTop,
                            TR::Node *trNode, TR::Node *inStoreNode, bool isIncrement0, bool isIncrement1, int32_t lengthMod)
    {
    const bool disptrace = DISPTRACE(trans);
@@ -8251,7 +8251,7 @@ tryTransformSingleArraySet(TR_CISCTransformer *trans, TR_CISCNode *ivStoreCISCNo
 
    // Insert nodes and maintain the CFG
    TR_ASSERT(lengthByteNode, "Expected at least one set of arrayset.");
-   TR::Block *block = trans->modifyBlockByVersioningCheck(block, trTreeTop, lengthByteNode->duplicateTree());
+   block = trans->modifyBlockByVersioningCheck(block, trTreeTop, lengthByteNode->duplicateTree());
    block = trans->insertBeforeNodes(block);
    TR::TreeTop *last = block->getLastRealTreeTop();
    trTreeTop = TR::TreeTop::create(comp, arrayset);
@@ -8282,7 +8282,7 @@ tryTransformSingleArraySet(TR_CISCTransformer *trans, TR_CISCNode *ivStoreCISCNo
    }
 
 static bool
-tryTransformDoubleArraySet(TR_CISCTransformer *trans, TR_CISCNode *ivStoreCISCNode, TR::Block *target, TR::TreeTop *trTreeTop,
+tryTransformDoubleArraySet(TR_CISCTransformer *trans, TR_CISCNode *ivStoreCISCNode, TR::Block *target, TR::Block *block, TR::TreeTop *trTreeTop,
                            TR::Node *trNode, TR::Node *inStoreNode1, TR::Node *inStoreNode2, bool isIncrement0, bool isIncrement1, int32_t lengthMod)
    {
    const bool disptrace = DISPTRACE(trans);
@@ -8372,7 +8372,6 @@ tryTransformDoubleArraySet(TR_CISCTransformer *trans, TR_CISCNode *ivStoreCISCNo
 
    TR::SymbolReference *arraysetSymRef = comp->getSymRefTab()->findOrCreateArraySetSymbol();
 
-   TR::Block *block =  NULL;
    TR::Node *lengthNode = NULL;
    TR::Node *computeIndex = NULL;
 
@@ -8769,12 +8768,12 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
 
    if (inStoreNode2 == NULL)
       {
-      return tryTransformSingleArraySet(trans, ivStoreCISCNode, target, trTreeTop,
+      return tryTransformSingleArraySet(trans, ivStoreCISCNode, target, block, trTreeTop,
                                         trNode, inStoreNode1, isIncrement0, isIncrement1, lengthMod);
       }
    else
       {
-      return tryTransformDoubleArraySet(trans, ivStoreCISCNode, target, trTreeTop,
+      return tryTransformDoubleArraySet(trans, ivStoreCISCNode, target, block, trTreeTop,
                                         trNode, inStoreNode1, inStoreNode2, isIncrement0, isIncrement1, lengthMod);
       }
    }
