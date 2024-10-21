@@ -8506,15 +8506,6 @@ tryTransformDoubleArraySet(TR_CISCTransformer *trans, TR_CISCNode *ivStoreCISCNo
       TR::Block *check2In1Block = TR::Block::createEmptyBlock(trNode, comp, block->getFrequency(), block);
       TR::Block *check1After2Block = TR::Block::createEmptyBlock(trNode, comp, block->getFrequency(), block);
 
-      cfg->insertBefore(case1Block, target);
-      cfg->insertBefore(case2Block, target);
-      cfg->insertBefore(check1After2Block, case3Block);
-      cfg->join(headBlock, case1Block);
-      cfg->insertBefore(case3Block, case1Block);
-      cfg->insertBefore(case4Block, case1Block);
-      cfg->insertBefore(check1Before2Block, check1After2Block);
-      cfg->insertBefore(check2In1Block, case4Block);
-
       TR::Node *ifNode = TR::Node::createif(TR::ifacmpne, output1Node, output2Node, check1Before2Block->getEntry());
       TR::TreeTop *newTreeTop = TR::TreeTop::create(comp, ifNode);
       trTreeTop->join(newTreeTop);
@@ -8584,6 +8575,15 @@ tryTransformDoubleArraySet(TR_CISCTransformer *trans, TR_CISCNode *ivStoreCISCNo
       trTreeTop->join(newTreeTop);
 
       trTreeTop = target->getEntry();
+
+      cfg->insertBefore(case1Block, target);
+      cfg->insertBefore(case2Block, target);
+      cfg->insertBefore(check1After2Block, case3Block);
+      cfg->join(headBlock, case1Block);
+      cfg->insertBefore(case3Block, case1Block);
+      cfg->insertBefore(case4Block, case1Block);
+      cfg->insertBefore(check1Before2Block, check1After2Block);
+      cfg->insertBefore(check2In1Block, case4Block);
       }
    else if (store1Ascending && !store2Ascending)
       {
