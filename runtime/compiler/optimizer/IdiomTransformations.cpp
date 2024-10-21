@@ -8507,74 +8507,47 @@ tryTransformDoubleArraySet(TR_CISCTransformer *trans, TR_CISCNode *ivStoreCISCNo
       TR::Block *check1After2Block = TR::Block::createEmptyBlock(trNode, comp, block->getFrequency(), block);
 
       TR::Node *ifNode = TR::Node::createif(TR::ifacmpne, output1Node, output2Node, check1Before2Block->getEntry());
-      TR::TreeTop *newTreeTop = TR::TreeTop::create(comp, ifNode);
-      trTreeTop->join(newTreeTop);
+      headBlock->append(TR::TreeTop::create(comp, ifNode));
 
-      trTreeTop = check1Before2Block->getEntry();
       ifNode = TR::Node::createif(TR::ifacmplt, output1Node, output2Node, check2In1Block->getEntry());
-      newTreeTop = TR::TreeTop::create(comp, ifNode);
-      trTreeTop->join(newTreeTop);
+      check1Before2Block->append(TR::TreeTop::create(comp, ifNode));
 
-      trTreeTop = check2In1Block->getEntry();
       TR::Node *output1EndNode = TR::Node::create(longOffsets ? TR::aladd : TR::aiadd, 2, output1Node, lengthNode);
       ifNode = TR::Node::createif(TR::ifacmplt, output2Node, output1EndNode, case2Block->getEntry());
-      newTreeTop = TR::TreeTop::create(comp, ifNode);
-      trTreeTop->join(newTreeTop);
+      check2In1Block->append(TR::TreeTop::create(comp, ifNode));
 
-      trTreeTop = check1After2Block->getEntry();
       TR::Node *output2EndNode = TR::Node::create(longOffsets ? TR::aladd : TR::aiadd, 2, output2Node, lengthNode);
       ifNode = TR::Node::createif(TR::ifacmpge, output1Node, output2EndNode);
-      newTreeTop = TR::TreeTop::create(comp, ifNode);
-      trTreeTop->join(newTreeTop);
+      check1After2Block->append(TR::TreeTop::create(comp, ifNode));
 
-      trTreeTop = case2Block->getEntry();
       TR::Node *arraysetNode = TR::Node::create(TR::arrayset, 3, output1Node, value1Node, lengthNode);
       arraysetNode->setSymbolReference(arraysetSymRef);
-      newTreeTop = TR::TreeTop::create(comp, arraysetNode);
-      trTreeTop->join(newTreeTop);
-      trTreeTop = newTreeTop;
+      case2Block->append(TR::TreeTop::create(comp, arraysetNode));
       TR::Node *tailNode = TR::Node::create(TR::asub, 2, output2Node, output1Node);
       arraysetNode = TR::Node::create(TR::arrayset, 3, output1EndNode, value2Node, tailNode);
       arraysetNode->setSymbolReference(arraysetSymRef);
-      newTreeTop = TR::TreeTop::create(comp, arraysetNode);
-      trTreeTop->join(newTreeTop);
-      trTreeTop = newTreeTop;
+      case2Block->append(TR::TreeTop::create(comp, arraysetNode));
       TR::Node *gotoNode = TR::Node::create(TR::Goto, 0, target->getEntry());
-      newTreeTop = TR::TreeTop::create(comp, gotoNode);
-      trTreeTop->join(newTreeTop);
+      case2Block->append(TR::TreeTop::create(comp, gotoNode));
 
-      trTreeTop = case4Block->getEntry();
       arraysetNode = TR::Node::create(TR::arrayset, 3, output1Node, value1Node, lengthNode);
       arraysetNode->setSymbolReference(arraysetSymRef);
-      newTreeTop = TR::TreeTop::create(comp, arraysetNode);
-      trTreeTop->join(newTreeTop);
-      trTreeTop = newTreeTop;
+      case4Block->append(TR::TreeTop::create(comp, arraysetNode));
       gotoNode = TR::Node::create(TR::Goto, 0, case1Block->getEntry());
-      newTreeTop = TR::TreeTop::create(comp, gotoNode);
-      trTreeTop->join(newTreeTop);
+      case4Block->append(TR::TreeTop::create(comp, gotoNode));
 
-      trTreeTop = case3Block->getEntry();
       tailNode = TR::Node::create(TR::asub, 2, output1Node, output2Node);
       arraysetNode = TR::Node::create(TR::arrayset, 3, output2EndNode, value1Node, tailNode);
       arraysetNode->setSymbolReference(arraysetSymRef);
-      newTreeTop = TR::TreeTop::create(comp, arraysetNode);
-      trTreeTop->join(newTreeTop);
-      trTreeTop = newTreeTop;
+      case3Block->append(TR::TreeTop::create(comp, arraysetNode));
       gotoNode = TR::Node::create(TR::Goto, 0, case1Block->getEntry());
-      newTreeTop = TR::TreeTop::create(comp, gotoNode);
-      trTreeTop->join(newTreeTop);
+      case3Block->append(TR::TreeTop::create(comp, gotoNode));
 
-      trTreeTop = case1Block->getEntry();
       arraysetNode = TR::Node::create(TR::arrayset, 3, output2Node, value2Node, lengthNode);
       arraysetNode->setSymbolReference(arraysetSymRef);
-      newTreeTop = TR::TreeTop::create(comp, arraysetNode);
-      trTreeTop->join(newTreeTop);
-      trTreeTop = newTreeTop;
+      case1Block->append(TR::TreeTop::create(comp, arraysetNode));
       gotoNode = TR::Node::create(TR::Goto, 0, target->getEntry());
-      newTreeTop = TR::TreeTop::create(comp, gotoNode);
-      trTreeTop->join(newTreeTop);
-
-      trTreeTop = target->getEntry();
+      case1Block->append(TR::TreeTop::create(comp, gotoNode));
 
       cfg->insertBefore(case1Block, target);
       cfg->insertBefore(case2Block, target);
@@ -8584,6 +8557,8 @@ tryTransformDoubleArraySet(TR_CISCTransformer *trans, TR_CISCNode *ivStoreCISCNo
       cfg->insertBefore(case4Block, case1Block);
       cfg->insertBefore(check1Before2Block, check1After2Block);
       cfg->insertBefore(check2In1Block, case4Block);
+
+      trTreeTop = target->getEntry();
       }
    else if (store1Ascending && !store2Ascending)
       {
@@ -8616,7 +8591,6 @@ tryTransformDoubleArraySet(TR_CISCTransformer *trans, TR_CISCNode *ivStoreCISCNo
       }
 
    trans->insertAfterNodes(block);
-
    trans->setSuccessorEdge(block, target);
 
    return true;
