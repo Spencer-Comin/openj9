@@ -8556,10 +8556,11 @@ tryTransformDoubleArraySet(TR_CISCTransformer *trans, TR_CISCNode *ivStoreCISCNo
       case1Block->append(TR::TreeTop::create(comp, gotoNode));
       trans->insertAfterNodes(case1Block);
 
+      cfg->insertBefore(headBlock, case1Block);
       cfg->insertBefore(case1Block, target);
       cfg->insertBefore(case2Block, target);
       cfg->insertBefore(check1After2Block, case3Block);
-      cfg->join(headBlock, case1Block);
+
       cfg->insertBefore(case3Block, case1Block);
       cfg->insertBefore(case4Block, case1Block);
       cfg->insertBefore(check1Before2Block, check1After2Block);
