@@ -8197,7 +8197,7 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
          }
       }
 
-   List<TR::Node> listArraySet(comp->trMemory());
+   ListHeadAndTail<TR::Node> listArraySet(comp->trMemory());
    TR::Node * computeIndex = NULL;
    TR::Node * lengthNode = NULL;
    TR::Node * lengthByteNode = NULL;
@@ -8392,7 +8392,7 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
       TR::Node * arrayset = TR::Node::create(TR::arrayset, 3, outputNode, valueNode, lengthByteNode);
       arrayset->setSymbolReference(comp->getSymRefTab()->findOrCreateArraySetSymbol());
 
-      listArraySet.add(TR::Node::create(TR::treetop, 1, arrayset));
+      listArraySet.append(TR::Node::create(TR::treetop, 1, arrayset));
       }
 
    TR::Node * indVarUpdateNode = TR::Node::createStore(indexVarSymRef, computeIndex);
