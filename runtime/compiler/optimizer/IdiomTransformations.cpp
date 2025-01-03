@@ -8118,6 +8118,7 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
    ListIterator<TR_CISCNode> ni(trans->getP2T() + P->getImportantNode(0)->getID());
    TR_CISCNode *inStoreCISCNode;
    TR::Node *inStoreNode;
+   int storeCount = 0;
    for (inStoreCISCNode = ni.getFirst(); inStoreCISCNode; inStoreCISCNode = ni.getNext())
       {
       if (!inStoreCISCNode->isOutsideOfLoop())
@@ -8136,6 +8137,11 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
              && !(inStoreNode->getType().isAddress() && inStoreNode->getSecondChild()->getAddress() == 0))
             {
             dumpOptDetails(comp, "the cg only supports arrayset to zero, but found a non-zero or non-constant value\n");
+            return false;
+            }
+         if (++storeCount > 2)
+            {
+            dumpOptDetails(comp, "Bailing CISCTransform2ArraySet - only supported for 1 or 2 arrays\n");
             return false;
             }
          appenderListStores.add(inStoreNode);
@@ -8196,15 +8202,21 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
          }
       }
 
-   List<TR::Node> listArraySet(comp->trMemory());
    TR::Node * computeIndex = NULL;
    TR::Node * lengthNode = NULL;
    TR::Node * lengthByteNode = NULL;
 
-   for (inStoreNode = iteratorStores.getFirst(); inStoreNode; inStoreNode = iteratorStores.getNext())
+   auto findArraySetNodes = [&](TR::Node *inStoreNode)
       {
-      TR::Node * outputNode = inStoreNode->getChild(0)->duplicateTree();
-      TR::Node * valueNode = convertStoreToLoad(comp, inStoreNode->getChild(1));
+      struct result
+         {
+         TR::Node *outputNode;
+         TR::Node *valueNode;
+         TR::Node *lengthByteNode;
+         };
+
+      TR::Node *outputNode = inStoreNode->getChild(0)->duplicateTree();
+      TR::Node *valueNode = convertStoreToLoad(comp, inStoreNode->getChild(1));
 
       uint32_t elementSize = 0;
       if (inStoreNode->getType().isAddress())
@@ -8266,7 +8278,7 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
          // This value becomes the index of the first element in the count-up version, and hence
          // the first element of the arrayset.
 
-       	 TR::Node * lastValueNode = convertStoreToLoad(comp, variableORconstRepNode1);
+         TR::Node * lastValueNode = convertStoreToLoad(comp, variableORconstRepNode1);
 
          // Determine if the induction variable update is before the arrayset
          bool isIndexVarUpdateBeforeArrayset = (trans->findStoreToSymRefInInsertBeforeNodes(indexVarSymRef->getReferenceNumber()) != NULL);
@@ -8322,13 +8334,13 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
             }
 
          TR::Node *lastLegalValue = createOP2(comp, TR::iadd, lastValueNode,
-                                   TR::Node::create(indexNode, TR::iconst, 0, lastLegalValueAdjustment + arrayStoreCommoningAdjustment));
+                                 TR::Node::create(indexNode, TR::iconst, 0, lastLegalValueAdjustment + arrayStoreCommoningAdjustment));
 
          // Search for the induction variable in the array access sub-tree and replace that node
          // with the last value index we just calculated.
          bool isFound = findAndOrReplaceNodesWithMatchingSymRefNumber(outputNode->getSecondChild(), lastLegalValue, indexVarSymRef->getReferenceNumber());
          if (!isFound && (indexVarSymRef != indexVar1SymRef))
-             isFound = findAndOrReplaceNodesWithMatchingSymRefNumber(outputNode->getSecondChild(), lastLegalValue, indexVar1SymRef->getReferenceNumber());
+            isFound = findAndOrReplaceNodesWithMatchingSymRefNumber(outputNode->getSecondChild(), lastLegalValue, indexVar1SymRef->getReferenceNumber());
 
          TR_ASSERT(isFound, "Count down arrayset was unable to find and replace array access induction variable.\n");
 
@@ -8356,7 +8368,7 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
          {
          TR::Node * lastValue = convertStoreToLoad(comp, variableORconstRepNode1);
          lastValue = createOP2(comp, isIncrement0 ? TR::iadd : TR::isub, lastValue,
-                                  TR::Node::create(indexNode, TR::iconst, 0, lengthMod));
+                                 TR::Node::create(indexNode, TR::iconst, 0, lengthMod));
 
          // Induction variable 0 is always part of the loop exit condition based on idiom graph.
          if (isIncrement0)
@@ -8387,47 +8399,53 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
             lengthByteNode,
             elementSizeNode);
          }
+      return result {outputNode, valueNode, lengthByteNode};
+      };
 
-      TR::Node * arrayset = TR::Node::create(TR::arrayset, 3, outputNode, valueNode, lengthByteNode);
+   TR::Block *blockArraysets = TR::Block::createEmptyBlock(trNode, comp, block->getFrequency(), block);
+   TR::Block *blockEnd = TR::Block::createEmptyBlock(trNode, comp, block->getFrequency(), block);
+
+   for (inStoreNode = iteratorStores.getFirst(); inStoreNode; inStoreNode = iteratorStores.getNext())
+      {
+      auto nodes = findArraySetNodes(inStoreNode);
+
+      TR::Node * arrayset = TR::Node::create(TR::arrayset, 3, nodes.outputNode, nodes.valueNode, nodes.lengthByteNode);
       arrayset->setSymbolReference(comp->getSymRefTab()->findOrCreateArraySetSymbol());
 
-      listArraySet.add(TR::Node::create(TR::treetop, 1, arrayset));
+      blockArraysets->append(TR::TreeTop::create(comp, arrayset));
       }
+
+   blockArraysets->append(TR::TreeTop::create(comp, TR::Node::create(trNode, TR::Goto, 0, blockEnd->getEntry())));
 
    TR::Node * indVarUpdateNode = TR::Node::createStore(indexVarSymRef, computeIndex);
    TR::TreeTop * indVarUpdateTreeTop = TR::TreeTop::create(comp, indVarUpdateNode);
-   TR::Node * indVar1UpdateNode = NULL;
-   TR::TreeTop * indVar1UpdateTreeTop = NULL;
+   blockEnd->append(indVarUpdateTreeTop);
    if (indexVarSymRef != indexVar1SymRef)
       {
-      indVar1UpdateNode = createStoreOP2(comp, indexVar1SymRef, TR::iadd, indexVar1SymRef, lengthNode, trNode);
-      indVar1UpdateTreeTop = TR::TreeTop::create(comp, indVar1UpdateNode);
+      TR::Node *indVar1UpdateNode = createStoreOP2(comp, indexVar1SymRef, TR::iadd, indexVar1SymRef, lengthNode, trNode);
+      TR::TreeTop *indVar1UpdateTreeTop = TR::TreeTop::create(comp, indVar1UpdateNode);
+      blockEnd->append(indVar1UpdateTreeTop);
       }
 
-   // Insert nodes and maintain the CFG
-   TR::TreeTop *last;
-   ListIterator<TR::Node> iteratorArraySet(&listArraySet);
-   TR::Node *arrayset = NULL;
-   TR_ASSERT(lengthByteNode, "Expected at least one set of arrayset.");
-   block = trans->modifyBlockByVersioningCheck(block, trTreeTop, lengthByteNode->duplicateTree());
-   block = trans->insertBeforeNodes(block);
-   last = block->getLastRealTreeTop();
-   for (arrayset = iteratorArraySet.getFirst(); arrayset; arrayset = iteratorArraySet.getNext())
+   TR::CFG *cfg = comp->getFlowGraph();
+   cfg->setStructure(NULL);
+   TR::TreeTop * orgNextTreeTop = block->getExit()->getNextTreeTop();
+   if (orgNextTreeTop)
       {
-      TR::TreeTop *newTop = TR::TreeTop::create(comp, arrayset);
-      last->join(newTop);
-      last = newTop;
+      cfg->insertBefore(blockEnd, orgNextTreeTop->getNode()->getBlock());
       }
-   last->join(indVarUpdateTreeTop);
-   indVarUpdateTreeTop->join(block->getExit());
-   if (indVar1UpdateTreeTop)
+   else
       {
-      block->append(indVar1UpdateTreeTop);
+      cfg->addNode(blockEnd);
       }
+   cfg->insertBefore(blockArraysets, blockEnd);
+   cfg->join(block, blockArraysets);
 
-   trans->insertAfterNodes(block);
+   blockEnd = trans->insertAfterNodes(blockEnd);
 
-   trans->setSuccessorEdge(block, target);
+   trans->setSuccessorEdge(block, blockArraysets);
+   trans->setSuccessorEdge(blockEnd, target);
+
    return true;
    }
 
