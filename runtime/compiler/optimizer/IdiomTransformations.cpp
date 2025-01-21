@@ -8443,8 +8443,8 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
 
       TR::SymbolReference *firstOutputSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), TR::Address);
       TR::SymbolReference *secondOutputSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), TR::Address);
-      TR::SymbolReference *firstValueSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), firstNodes.lengthByteNode->getDataType());
-      TR::SymbolReference *secondValueSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), firstNodes.lengthByteNode->getDataType());
+      TR::SymbolReference *firstValueSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), firstNodes.valueNode->getDataType());
+      TR::SymbolReference *secondValueSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), firstNodes.valueNode->getDataType());
       TR::SymbolReference *firstLengthByteSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), longOffsets ? TR::Int64 : TR::Int32);
       TR::SymbolReference *secondLengthByteSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), longOffsets ? TR::Int64 : TR::Int32);
 
@@ -8461,9 +8461,9 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
          const float equalArraysProbability = 0.01;
          const float overlappingArraysProbability = 0.01;
 
-         int checkOrderFrequency = (int)((1-equalArraysProbability) * block->getFrequency() + 0.5);
+         int checkOrderFrequency = (int)((1-equalArraysProbability) * block->getFrequency());
          int checkOverlapFrequency = checkOrderFrequency/2;
-         int setPartialFrequency = (int)(overlappingArraysProbability * checkOverlapFrequency + 0.5);
+         int setPartialFrequency = (int)(overlappingArraysProbability * checkOverlapFrequency);
          int setFirstFullFrequency = 2 * (checkOverlapFrequency - setPartialFrequency);
          int setSecondFullFrequency = block->getFrequency() - checkOrderFrequency + setPartialFrequency + setFirstFullFrequency;
 
@@ -8475,10 +8475,6 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
          TR::Block *blockSetSecondPartial = TR::Block::createEmptyBlock(trNode, comp, setPartialFrequency, block);
          TR::Block *blockSetFirstFull = TR::Block::createEmptyBlock(trNode, comp, setFirstFullFrequency, block);
          TR::Block *blockSetSecondFull = TR::Block::createEmptyBlock(trNode, comp, setSecondFullFrequency, block);
-
-         // partial filling is only when the arrays overlap, which should be an exceptional case
-         blockSetFirstPartial->setIsSuperCold();
-         blockSetSecondPartial->setIsSuperCold();
 
          // Start
          blockStart->append(TR::TreeTop::create(comp, TR::Node::createif(TR::ifacmpeq, TR::Node::createLoad(firstOutputSymRef), TR::Node::createLoad(secondOutputSymRef), blockSetSecondFull->getEntry())));
@@ -8495,7 +8491,7 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
             endSecondOutputSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), TR::Address);
             blockCheckFirstOverlap->append(TR::TreeTop::create(comp, TR::Node::createStore(endSecondOutputSymRef, endSecondOutput)));
             }
-         blockCheckFirstOverlap->append(TR::TreeTop::create(comp, TR::Node::createif(TR::ifacmplt, TR::Node::createLoad(firstOutputSymRef), TR::Node::createLoad(endSecondOutputSymRef), blockSetSecondPartial->getEntry())));
+         blockCheckFirstOverlap->append(TR::TreeTop::create(comp, TR::Node::createif(TR::ifacmplt, TR::Node::createLoad(firstOutputSymRef), endSecondOutput, blockSetSecondPartial->getEntry())));
 
          // Trampoline
          blockTrampoline->append(TR::TreeTop::create(comp, TR::Node::create(TR::Goto, 0, blockSetFirstFull->getEntry())));
@@ -8512,7 +8508,7 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
          blockCheckSecondOverlap->append(TR::TreeTop::create(comp, TR::Node::createif(TR::ifacmplt, TR::Node::createLoad(secondOutputSymRef), endFirstOutput, blockSetFirstPartial->getEntry())));
 
          // Set First Partial
-         TR::Node *partialLength = TR::Node::create(TR::asub, 2, TR::Node::createLoad(firstOutputSymRef), TR::Node::createLoad(secondOutputSymRef));
+         TR::Node *partialLength = TR::Node::create(TR::asub, 2, TR::Node::createLoad(secondOutputSymRef), TR::Node::createLoad(firstOutputSymRef));
          TR::Node *arrayset = NULL;
          arrayset = TR::Node::create(TR::arrayset, 3,
                                      TR::Node::createLoad(ascending ? endFirstOutputSymRef : firstOutputSymRef),
@@ -8529,7 +8525,7 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
          blockSetFirstPartial->append(TR::TreeTop::create(comp, TR::Node::create(TR::Goto, 0, blockEnd->getEntry())));
 
          // Set Second Partial
-         partialLength = TR::Node::create(TR::asub, 2, TR::Node::createLoad(secondOutputSymRef), TR::Node::createLoad(firstOutputSymRef));
+         partialLength = TR::Node::create(TR::asub, 2, TR::Node::createLoad(firstOutputSymRef), TR::Node::createLoad(secondOutputSymRef));
          arrayset = TR::Node::create(TR::arrayset, 3,
                                      TR::Node::createLoad(ascending ? endSecondOutputSymRef : secondOutputSymRef),
                                      TR::Node::createLoad(ascending ? firstValueSymRef : secondValueSymRef),
@@ -8582,16 +8578,14 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
          }
       }
 
-   blockStart->append(TR::TreeTop::create(comp, TR::Node::create(trNode, TR::Goto, 0, blockEnd->getEntry())));
-
-   TR::Node * indVarUpdateNode = TR::Node::createStore(indexVarSymRef, computeIndex);
+   TR::Node * indVarUpdateNode = TR::Node::createStore(indexVarSymRef, computeIndex->duplicateTree());
    TR::TreeTop * indVarUpdateTreeTop = TR::TreeTop::create(comp, indVarUpdateNode);
-   block->append(indVarUpdateTreeTop);
+   blockEnd->append(indVarUpdateTreeTop);
    if (indexVarSymRef != indexVar1SymRef)
       {
-      TR::Node *indVar1UpdateNode = createStoreOP2(comp, indexVar1SymRef, TR::iadd, indexVar1SymRef, lengthNode, trNode);
+      TR::Node *indVar1UpdateNode = createStoreOP2(comp, indexVar1SymRef, TR::iadd, indexVar1SymRef, lengthNode->duplicateTree(), trNode->duplicateTree());
       TR::TreeTop *indVar1UpdateTreeTop = TR::TreeTop::create(comp, indVar1UpdateNode);
-      block->append(indVar1UpdateTreeTop);
+      blockEnd->append(indVar1UpdateTreeTop);
       }
 
    cfg->join(block, blockStart);
