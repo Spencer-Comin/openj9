@@ -205,6 +205,26 @@ void CTZGEmulator::emulate(mcontext_t *cpu)
    cpu->gregs[r1] = (uint64_t)trailingZeroes(cpu->gregs[r2]);
    }
 
+class POPCNTEmulator : public InstEmulator
+   {
+   private:
+      uint8_t r1, r2;
+   public:
+      POPCNTEmulator(uint8_t *start);
+      virtual void emulate(mcontext_t *cpu);
+   };
+
+POPCNTEmulator::POPCNTEmulator(uint8_t *start)
+   {
+   r1 = (start[3] & 0xF0) >> 4;
+   r2 = start[3] & 0x0F;
+   }
+
+void POPCNTEmulator::emulate(mcontext_t *cpu)
+   {
+   cpu->gregs[r1] = (uint64_t) populationCount(cpu->gregs[r2]);
+   }
+
 InstEmulator *InstEmulator::decode(uint8_t *pc)
    {
    // Checking the optcode in the first byte and last byte of the instruction to
@@ -228,6 +248,10 @@ InstEmulator *InstEmulator::decode(uint8_t *pc)
    else if (*(uint16_t*)(pc-4) == 0xB969)
       {
       return new CTZGEmulator(pc-4);
+      }
+   else if (*(uint16_t*)(pc-4) == 0xB9E1)
+      {
+      return new POPCNTEmulator(pc-4);
       }
 
    return NULL;
