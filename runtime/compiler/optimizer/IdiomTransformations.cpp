@@ -8436,146 +8436,181 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
       {
       auto firstNodes = findArraySetNodes(iteratorStores.getFirst());
       auto secondNodes = findArraySetNodes(iteratorStores.getNext());
-      traceMsg(comp, "Generating double arrayset, first array %p first value %p, second array %p second value %p\n", firstNodes.outputNode, firstNodes.valueNode, secondNodes.outputNode, secondNodes.valueNode);
 
-
-      const bool longOffsets = trans->isGenerateI2L();
-
-      TR::SymbolReference *firstOutputSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), TR::Address);
-      TR::SymbolReference *secondOutputSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), TR::Address);
-      TR::SymbolReference *firstValueSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), firstNodes.valueNode->getDataType());
-      TR::SymbolReference *secondValueSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), firstNodes.valueNode->getDataType());
-      TR::SymbolReference *firstLengthByteSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), longOffsets ? TR::Int64 : TR::Int32);
-      TR::SymbolReference *secondLengthByteSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), longOffsets ? TR::Int64 : TR::Int32);
-
-      blockStart->append(TR::TreeTop::create(comp, TR::Node::createStore(firstOutputSymRef, firstNodes.outputNode)));
-      blockStart->append(TR::TreeTop::create(comp, TR::Node::createStore(secondOutputSymRef, secondNodes.outputNode)));
-      blockStart->append(TR::TreeTop::create(comp, TR::Node::createStore(firstValueSymRef, firstNodes.valueNode)));
-      blockStart->append(TR::TreeTop::create(comp, TR::Node::createStore(secondValueSymRef, secondNodes.valueNode)));
-      blockStart->append(TR::TreeTop::create(comp, TR::Node::createStore(firstLengthByteSymRef, firstNodes.lengthByteNode)));
-      blockStart->append(TR::TreeTop::create(comp, TR::Node::createStore(secondLengthByteSymRef, secondNodes.lengthByteNode)));
-
-      if (firstNodes.ascending == secondNodes.ascending)
-         {
-         const bool ascending = firstNodes.ascending;
-         const float equalArraysProbability = 0.01;
-         const float overlappingArraysProbability = 0.01;
-
-         int checkOrderFrequency = (int)((1-equalArraysProbability) * block->getFrequency());
-         int checkOverlapFrequency = checkOrderFrequency/2;
-         int setPartialFrequency = (int)(overlappingArraysProbability * checkOverlapFrequency);
-         int setFirstFullFrequency = 2 * (checkOverlapFrequency - setPartialFrequency);
-         int setSecondFullFrequency = block->getFrequency() - checkOrderFrequency + setPartialFrequency + setFirstFullFrequency;
-
-         TR::Block *blockCheckOrder = TR::Block::createEmptyBlock(trNode, comp, checkOrderFrequency, block);
-         TR::Block *blockCheckFirstOverlap = TR::Block::createEmptyBlock(trNode, comp, checkOverlapFrequency, block);
-         TR::Block *blockCheckSecondOverlap = TR::Block::createEmptyBlock(trNode, comp, checkOverlapFrequency, block);
-         TR::Block *blockTrampoline = TR::Block::createEmptyBlock(trNode, comp, setPartialFrequency, block);
-         TR::Block *blockSetFirstPartial = TR::Block::createEmptyBlock(trNode, comp, setPartialFrequency, block);
-         TR::Block *blockSetSecondPartial = TR::Block::createEmptyBlock(trNode, comp, setPartialFrequency, block);
-         TR::Block *blockSetFirstFull = TR::Block::createEmptyBlock(trNode, comp, setFirstFullFrequency, block);
-         TR::Block *blockSetSecondFull = TR::Block::createEmptyBlock(trNode, comp, setSecondFullFrequency, block);
-
-         // Start
-         blockStart->append(TR::TreeTop::create(comp, TR::Node::createif(TR::ifacmpeq, TR::Node::createLoad(firstOutputSymRef), TR::Node::createLoad(secondOutputSymRef), blockSetSecondFull->getEntry())));
-
-         // Check Order
-         blockCheckOrder->append(TR::TreeTop::create(comp, TR::Node::createif(TR::ifacmplt, TR::Node::createLoad(firstOutputSymRef), TR::Node::createLoad(secondOutputSymRef), blockCheckSecondOverlap->getEntry())));
-
-         // Check First Overlap
-         TR::Node *endSecondOutput = TR::Node::create(longOffsets ? TR::aladd : TR::aiadd, 2,
-                                                 TR::Node::createLoad(secondOutputSymRef), TR::Node::createLoad(secondLengthByteSymRef));
-         TR::SymbolReference *endSecondOutputSymRef = NULL;
-         if (ascending)
-            {
-            endSecondOutputSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), TR::Address);
-            blockCheckFirstOverlap->append(TR::TreeTop::create(comp, TR::Node::createStore(endSecondOutputSymRef, endSecondOutput)));
-            }
-         blockCheckFirstOverlap->append(TR::TreeTop::create(comp, TR::Node::createif(TR::ifacmplt, TR::Node::createLoad(firstOutputSymRef), endSecondOutput, blockSetSecondPartial->getEntry())));
-
-         // Trampoline
-         blockTrampoline->append(TR::TreeTop::create(comp, TR::Node::create(TR::Goto, 0, blockSetFirstFull->getEntry())));
-
-         // Check Second Overlap
-         TR::Node *endFirstOutput = TR::Node::create(longOffsets ? TR::aladd : TR::aiadd, 2,
-                                                 TR::Node::createLoad(firstOutputSymRef), TR::Node::createLoad(firstLengthByteSymRef));
-         TR::SymbolReference *endFirstOutputSymRef = NULL;
-         if (ascending)
-            {
-            endFirstOutputSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), TR::Address);
-            blockCheckSecondOverlap->append(TR::TreeTop::create(comp, TR::Node::createStore(endFirstOutputSymRef, endFirstOutput)));
-            }
-         blockCheckSecondOverlap->append(TR::TreeTop::create(comp, TR::Node::createif(TR::ifacmplt, TR::Node::createLoad(secondOutputSymRef), endFirstOutput, blockSetFirstPartial->getEntry())));
-
-         // Set First Partial
-         TR::Node *partialLength = TR::Node::create(TR::asub, 2, TR::Node::createLoad(secondOutputSymRef), TR::Node::createLoad(firstOutputSymRef));
-         TR::Node *arrayset = NULL;
-         arrayset = TR::Node::create(TR::arrayset, 3,
-                                     TR::Node::createLoad(ascending ? endFirstOutputSymRef : firstOutputSymRef),
-                                     TR::Node::createLoad(ascending ? secondValueSymRef : firstValueSymRef),
-                                     partialLength);
-         arrayset->setSymbolReference(arraysetSymRef);
-         blockSetFirstPartial->append(TR::TreeTop::create(comp, arrayset));
-         arrayset = TR::Node::create(TR::arrayset, 3,
-                                     TR::Node::createLoad(ascending ? firstOutputSymRef : secondOutputSymRef),
-                                     TR::Node::createLoad(ascending ? firstValueSymRef : secondValueSymRef),
-                                     TR::Node::createLoad(firstLengthByteSymRef));
-         arrayset->setSymbolReference(arraysetSymRef);
-         blockSetFirstPartial->append(TR::TreeTop::create(comp, arrayset));
-         blockSetFirstPartial->append(TR::TreeTop::create(comp, TR::Node::create(TR::Goto, 0, blockEnd->getEntry())));
-
-         // Set Second Partial
-         partialLength = TR::Node::create(TR::asub, 2, TR::Node::createLoad(firstOutputSymRef), TR::Node::createLoad(secondOutputSymRef));
-         arrayset = TR::Node::create(TR::arrayset, 3,
-                                     TR::Node::createLoad(ascending ? endSecondOutputSymRef : secondOutputSymRef),
-                                     TR::Node::createLoad(ascending ? firstValueSymRef : secondValueSymRef),
-                                     partialLength);
-         arrayset->setSymbolReference(arraysetSymRef);
-         blockSetSecondPartial->append(TR::TreeTop::create(comp, arrayset));
-         blockSetSecondPartial->append(TR::TreeTop::create(comp, TR::Node::create(TR::Goto, 0, blockSetSecondFull->getEntry())));
-
-         // Set First Full
-         arrayset = TR::Node::create(TR::arrayset, 3,
-                                     TR::Node::createLoad(ascending ? firstOutputSymRef : secondOutputSymRef),
-                                     TR::Node::createLoad(ascending ? firstValueSymRef : secondValueSymRef),
-                                     TR::Node::createLoad(firstLengthByteSymRef));
-         arrayset->setSymbolReference(arraysetSymRef);
-         blockSetFirstFull->append(TR::TreeTop::create(comp, arrayset));
-
-         // Set Second Full
-         arrayset = TR::Node::create(TR::arrayset, 3,
-                                     TR::Node::createLoad(ascending ? secondOutputSymRef : firstOutputSymRef),
-                                     TR::Node::createLoad(ascending ? secondValueSymRef : firstValueSymRef),
-                                     TR::Node::createLoad(firstLengthByteSymRef));
-         arrayset->setSymbolReference(arraysetSymRef);
-         blockSetSecondFull->append(TR::TreeTop::create(comp, arrayset));
-
-         // wire up blocks
-         cfg->insertBefore(blockSetSecondFull, blockEnd);
-         cfg->insertBefore(blockSetFirstFull, blockSetSecondFull);
-         cfg->insertBefore(blockCheckSecondOverlap, blockSetFirstFull);
-         cfg->insertBefore(blockSetSecondPartial, blockCheckSecondOverlap);
-         cfg->insertBefore(blockSetFirstPartial, blockSetSecondPartial);
-         cfg->insertBefore(blockTrampoline, blockSetFirstPartial);
-         cfg->insertBefore(blockCheckFirstOverlap, blockTrampoline);
-         cfg->insertBefore(blockCheckOrder, blockCheckFirstOverlap);
-         cfg->insertBefore(blockStart, blockCheckOrder);
-
-         trans->setSuccessorEdges(blockStart, blockCheckOrder, blockSetSecondFull);
-         trans->setSuccessorEdges(blockCheckOrder, blockCheckFirstOverlap, blockCheckSecondOverlap);
-         trans->setSuccessorEdges(blockCheckFirstOverlap, blockTrampoline, blockSetSecondPartial);
-         trans->setSuccessorEdges(blockCheckSecondOverlap, blockSetFirstFull, blockSetFirstPartial);
-         trans->setSuccessorEdge(blockTrampoline, blockSetFirstFull);
-         trans->setSuccessorEdge(blockSetSecondPartial, blockSetSecondFull);
-         trans->setSuccessorEdge(blockSetFirstFull, blockSetSecondFull);
-         trans->setSuccessorEdge(blockSetFirstPartial, blockEnd);
-         trans->setSuccessorEdge(blockSetSecondFull, blockEnd);
-         }
-      else
+      if (firstNodes.ascending != secondNodes.ascending)
          {
          traceMsg(comp, "Haven't figured out cross-directional double arrayset yet\n");
          return false;
          }
+
+      traceMsg(comp, "Generating double arrayset, first array %p first value %p, second array %p second value %p\n", firstNodes.outputNode, firstNodes.valueNode, secondNodes.outputNode, secondNodes.valueNode);
+
+      const bool longOffsets = trans->isGenerateI2L();
+
+      // TODO: give these variables proper names
+      TR::SymbolReference *ai1SymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), TR::Address);
+      TR::SymbolReference *ai2SymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), TR::Address);
+      TR::SymbolReference *vi1SymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), firstNodes.valueNode->getDataType());
+      TR::SymbolReference *vi2SymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), firstNodes.valueNode->getDataType());
+      TR::SymbolReference *liSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), longOffsets ? TR::Int64 : TR::Int32);
+
+      TR::SymbolReference *ao1SymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), TR::Address);
+      TR::SymbolReference *ao2SymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), TR::Address);
+      TR::SymbolReference *vo1SymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), firstNodes.valueNode->getDataType());
+      TR::SymbolReference *vo2SymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), firstNodes.valueNode->getDataType());
+      TR::SymbolReference *lo1SymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), longOffsets ? TR::Int64 : TR::Int32);
+      TR::SymbolReference *lo2SymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), longOffsets ? TR::Int64 : TR::Int32);
+
+      const bool ascending = firstNodes.ascending;
+      const float equalArraysProbability = 0.01;
+      const float overlappingArraysProbability = 0.01;
+
+      int freqStart = block->getFrequency();
+      int freqFullOverlap = (int)(equalArraysProbability * freqStart);
+      int freqOrderCheck = freqStart - freqFullOverlap;
+      int freqOverlapCheck = freqOrderCheck/2;
+      int freqPartialOverlap = (int)(overlappingArraysProbability * freqOverlapCheck);
+      int freqDisjointTrampoline = freqOverlapCheck - freqPartialOverlap;
+      int freqDisjointLength = 2 * freqDisjointTrampoline;
+      int freq1stArrayset = freqOrderCheck;
+      int freq2ndArrayset = freqStart;
+
+      TR::Block *blockOrderCheck = TR::Block::createEmptyBlock(trNode, comp, freqOrderCheck, block);
+      TR::Block *block1stOverlapCheck = TR::Block::createEmptyBlock(trNode, comp, freqOverlapCheck, block);
+      TR::Block *block2ndOverlapCheck = TR::Block::createEmptyBlock(trNode, comp, freqOverlapCheck, block);
+      TR::Block *block1stOverlapTrampoline = TR::Block::createEmptyBlock(trNode, comp, freqPartialOverlap, block);
+      TR::Block *block2ndOverlapTrampoline = TR::Block::createEmptyBlock(trNode, comp, freqPartialOverlap, block);
+      TR::Block *block1stDisjointTrampoline = TR::Block::createEmptyBlock(trNode, comp, freqDisjointTrampoline, block);
+      TR::Block *block2ndDisjointTrampoline = TR::Block::createEmptyBlock(trNode, comp, freqDisjointTrampoline, block);
+      TR::Block *blockSetDisjointLength = TR::Block::createEmptyBlock(trNode, comp, freqDisjointLength, block);
+      TR::Block *blockFullOverlap = TR::Block::createEmptyBlock(trNode, comp, freqFullOverlap, block);
+      TR::Block *block1stArrayset = TR::Block::createEmptyBlock(trNode, comp, freq1stArrayset, block);
+      TR::Block *block2ndArrayset = TR::Block::createEmptyBlock(trNode, comp, freq2ndArrayset, block);
+
+      // Start
+      blockStart->append(TR::TreeTop::create(comp, TR::Node::createStore(ai1SymRef, firstNodes.outputNode)));
+      blockStart->append(TR::TreeTop::create(comp, TR::Node::createStore(ai2SymRef, secondNodes.outputNode)));
+      blockStart->append(TR::TreeTop::create(comp, TR::Node::createStore(vi1SymRef, firstNodes.valueNode)));
+      blockStart->append(TR::TreeTop::create(comp, TR::Node::createStore(vi2SymRef, secondNodes.valueNode)));
+      blockStart->append(TR::TreeTop::create(comp, TR::Node::createStore(liSymRef, firstNodes.lengthByteNode)));
+      blockStart->append(TR::TreeTop::create(comp, TR::Node::createif(TR::ifacmpeq, firstNodes.outputNode, secondNodes.outputNode, blockFullOverlap->getEntry())));
+
+      // Order Check
+      blockOrderCheck->append(TR::TreeTop::create(comp, TR::Node::createif(TR::ifacmplt, TR::Node::createLoad(ai1SymRef), TR::Node::createLoad(ai2SymRef), block2ndOverlapCheck->getEntry())));
+
+      // 1st Overlap Check
+      TR::SymbolReference *ai2EndSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), TR::Address);
+      TR::Node *ai2EndNode = TR::Node::create(longOffsets ? TR::aladd : TR::aiadd, 2, TR::Node::createLoad(ai2SymRef), TR::Node::createLoad(liSymRef));
+      if (ascending)
+         {
+         block1stOverlapCheck->append(TR::TreeTop::create(comp, TR::Node::createStore(vo1SymRef, TR::Node::createLoad(vi1SymRef))));
+         block1stOverlapCheck->append(TR::TreeTop::create(comp, TR::Node::createStore(ao2SymRef, TR::Node::createLoad(ai2SymRef))));
+         block1stOverlapCheck->append(TR::TreeTop::create(comp, TR::Node::createStore(vo2SymRef, TR::Node::createLoad(vi2SymRef))));
+         block1stOverlapCheck->append(TR::TreeTop::create(comp, TR::Node::createStore(ai2EndSymRef, ai2EndNode)));
+         }
+      else
+         {
+         block1stOverlapCheck->append(TR::TreeTop::create(comp, TR::Node::createStore(ao1SymRef, TR::Node::createLoad(ai2SymRef))));
+         block1stOverlapCheck->append(TR::TreeTop::create(comp, TR::Node::createStore(vo1SymRef, TR::Node::createLoad(vi2SymRef))));
+         block1stOverlapCheck->append(TR::TreeTop::create(comp, TR::Node::createStore(ao2SymRef, TR::Node::createLoad(ai1SymRef))));
+         block1stOverlapCheck->append(TR::TreeTop::create(comp, TR::Node::createStore(vo2SymRef, TR::Node::createLoad(vi1SymRef))));
+         }
+      block1stOverlapCheck->append(TR::TreeTop::create(comp, TR::Node::createif(TR::ifacmplt, TR::Node::createLoad(ai1SymRef), ai2EndNode, block1stOverlapTrampoline->getEntry())));
+
+      // 1st Overlap Trampoline
+      if (ascending)
+         {
+         block1stOverlapTrampoline->append(TR::TreeTop::create(comp, TR::Node::createStore(ao1SymRef, TR::Node::createLoad(ai2EndSymRef))));
+         }
+      TR::Node *addrDiffNode = TR::Node::create(TR::asub, 2, TR::Node::createLoad(ai1SymRef), TR::Node::createLoad(ai2SymRef));
+      block1stOverlapTrampoline->append(TR::TreeTop::create(comp, TR::Node::createStore(lo1SymRef, addrDiffNode)));
+      block1stOverlapTrampoline->append(TR::TreeTop::create(comp, TR::Node::create(TR::Goto, 0, block1stArrayset->getEntry())));
+
+      // 1st Disjoint Trampoline
+      if (ascending)
+         {
+         block1stDisjointTrampoline->append(TR::TreeTop::create(comp, TR::Node::createStore(ao1SymRef, TR::Node::createLoad(ai1SymRef))));
+         }
+      block1stOverlapTrampoline->append(TR::TreeTop::create(comp, TR::Node::create(TR::Goto, 0, blockSetDisjointLength->getEntry())));
+
+      // 2nd Overlap Check
+      TR::SymbolReference *ai1EndSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), TR::Address);
+      TR::Node *ai1EndNode = TR::Node::create(longOffsets ? TR::aladd : TR::aiadd, 2, TR::Node::createLoad(ai1SymRef), TR::Node::createLoad(liSymRef));
+      if (ascending)
+         {
+         block2ndOverlapCheck->append(TR::TreeTop::create(comp, TR::Node::createStore(vo1SymRef, TR::Node::createLoad(vi2SymRef))));
+         block2ndOverlapCheck->append(TR::TreeTop::create(comp, TR::Node::createStore(ao2SymRef, TR::Node::createLoad(ai1SymRef))));
+         block2ndOverlapCheck->append(TR::TreeTop::create(comp, TR::Node::createStore(vo2SymRef, TR::Node::createLoad(vi1SymRef))));
+         block2ndOverlapCheck->append(TR::TreeTop::create(comp, TR::Node::createStore(ai1EndSymRef, ai1EndNode)));
+         }
+      else
+         {
+         block2ndOverlapCheck->append(TR::TreeTop::create(comp, TR::Node::createStore(ao1SymRef, TR::Node::createLoad(ai1SymRef))));
+         block2ndOverlapCheck->append(TR::TreeTop::create(comp, TR::Node::createStore(vo1SymRef, TR::Node::createLoad(vi1SymRef))));
+         block2ndOverlapCheck->append(TR::TreeTop::create(comp, TR::Node::createStore(ao2SymRef, TR::Node::createLoad(ai2SymRef))));
+         block2ndOverlapCheck->append(TR::TreeTop::create(comp, TR::Node::createStore(vo2SymRef, TR::Node::createLoad(vi2SymRef))));
+         }
+      block2ndOverlapCheck->append(TR::TreeTop::create(comp, TR::Node::createif(TR::ifacmplt, TR::Node::createLoad(ai2SymRef), ai1EndNode, block2ndOverlapTrampoline->getEntry())));
+
+      // 2nd Overlap Trampoline
+      if (ascending)
+         {
+         block2ndOverlapTrampoline->append(TR::TreeTop::create(comp, TR::Node::createStore(ao1SymRef, ai1EndNode)));
+         }
+      addrDiffNode = TR::Node::create(TR::asub, 2, TR::Node::createLoad(ai2SymRef), TR::Node::createLoad(ai1SymRef));
+      block1stOverlapTrampoline->append(TR::TreeTop::create(comp, TR::Node::createStore(lo1SymRef, addrDiffNode)));
+      block1stOverlapTrampoline->append(TR::TreeTop::create(comp, TR::Node::create(TR::Goto, 0, block1stArrayset->getEntry())));
+
+      // 2nd Disjoint Trampoline
+      if (ascending)
+         {
+         block1stDisjointTrampoline->append(TR::TreeTop::create(comp, TR::Node::createStore(ao1SymRef, TR::Node::createLoad(ai2SymRef))));
+         }
+      block1stOverlapTrampoline->append(TR::TreeTop::create(comp, TR::Node::create(TR::Goto, 0, blockSetDisjointLength->getEntry())));
+
+      // Set Disjoint Length
+      blockSetDisjointLength->append(TR::TreeTop::create(comp, TR::Node::createStore(lo2SymRef, TR::Node::createLoad(liSymRef))));
+
+      // Set Full Overlap
+      blockFullOverlap->append(TR::TreeTop::create(comp, TR::Node::createStore(ao2SymRef, TR::Node::createLoad(ai2SymRef))));
+      blockFullOverlap->append(TR::TreeTop::create(comp, TR::Node::createStore(vo2SymRef, TR::Node::createLoad(ascending ? vi2SymRef : vi1SymRef))));
+      blockFullOverlap->append(TR::TreeTop::create(comp, TR::Node::create(TR::Goto, 0, block2ndArrayset->getEntry())));
+
+      // 1st Arrayset
+      TR::Node *arrayset = TR::Node::create(TR::arrayset, 3, TR::Node::createLoad(ao1SymRef), TR::Node::createLoad(vo1SymRef), TR::Node::createLoad(lo1SymRef));
+      arrayset->setSymbolReference(arraysetSymRef);
+      block1stArrayset->append(TR::TreeTop::create(comp, arrayset));
+
+      // 2nd Arrayset
+      arrayset = TR::Node::create(TR::arrayset, 3, TR::Node::createLoad(ao2SymRef), TR::Node::createLoad(vo2SymRef), TR::Node::createLoad(liSymRef));
+      arrayset->setSymbolReference(arraysetSymRef);
+      block1stArrayset->append(TR::TreeTop::create(comp, arrayset));
+
+      // Wire up blocks
+      cfg->insertBefore(block2ndArrayset, blockEnd);
+      cfg->insertBefore(block1stArrayset, block2ndArrayset);
+      cfg->insertBefore(blockSetDisjointLength, block1stArrayset);
+      cfg->insertBefore(blockFullOverlap, blockSetDisjointLength);
+      cfg->insertBefore(block2ndOverlapTrampoline, blockFullOverlap);
+      cfg->insertBefore(block2ndDisjointTrampoline, block2ndOverlapTrampoline);
+      cfg->insertBefore(block2ndOverlapCheck, block2ndDisjointTrampoline);
+      cfg->insertBefore(block1stOverlapTrampoline, block2ndOverlapCheck);
+      cfg->insertBefore(block1stDisjointTrampoline, block1stOverlapTrampoline);
+      cfg->insertBefore(block1stOverlapCheck, block1stDisjointTrampoline);
+      cfg->insertBefore(blockOrderCheck, block1stOverlapCheck);
+      cfg->insertBefore(blockStart, blockOrderCheck);
+
+      trans->setSuccessorEdges(blockStart, blockOrderCheck, blockFullOverlap);
+      trans->setSuccessorEdges(blockOrderCheck, block1stOverlapCheck, block2ndOverlapCheck);
+      trans->setSuccessorEdges(block1stOverlapCheck, block1stDisjointTrampoline, block1stOverlapTrampoline);
+      trans->setSuccessorEdge(block1stDisjointTrampoline, block1stOverlapTrampoline);
+      trans->setSuccessorEdge(block1stOverlapTrampoline, block2ndOverlapCheck);
+      trans->setSuccessorEdges(block2ndOverlapCheck, block2ndDisjointTrampoline, block2ndOverlapTrampoline);
+      trans->setSuccessorEdge(block2ndDisjointTrampoline, block2ndOverlapTrampoline);
+      trans->setSuccessorEdge(block2ndOverlapTrampoline, blockFullOverlap);
+      trans->setSuccessorEdge(blockFullOverlap, blockSetDisjointLength);
+      trans->setSuccessorEdge(blockSetDisjointLength, block1stArrayset);
+      trans->setSuccessorEdge(block1stArrayset, block2ndArrayset);
       }
 
    TR::Node * indVarUpdateNode = TR::Node::createStore(indexVarSymRef, computeIndex->duplicateTree());
