@@ -8611,6 +8611,7 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
       trans->setSuccessorEdge(blockFullOverlap, blockSetDisjointLength);
       trans->setSuccessorEdge(blockSetDisjointLength, block1stArrayset);
       trans->setSuccessorEdge(block1stArrayset, block2ndArrayset);
+      trans->setSuccessorEdge(block2ndArrayset, blockEnd);
       }
 
    TR::Node * indVarUpdateNode = TR::Node::createStore(indexVarSymRef, computeIndex->duplicateTree());
