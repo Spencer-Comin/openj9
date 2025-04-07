@@ -8531,7 +8531,7 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
          {
          block1stDisjointTrampoline->append(TR::TreeTop::create(comp, TR::Node::createStore(ao1SymRef, TR::Node::createLoad(ai1SymRef))));
          }
-      block1stOverlapTrampoline->append(TR::TreeTop::create(comp, TR::Node::create(TR::Goto, 0, blockSetDisjointLength->getEntry())));
+      block1stDisjointTrampoline->append(TR::TreeTop::create(comp, TR::Node::create(TR::Goto, 0, blockSetDisjointLength->getEntry())));
 
       // 2nd Overlap Check
       TR::SymbolReference *ai1EndSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), TR::Address);
@@ -8558,15 +8558,15 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
          block2ndOverlapTrampoline->append(TR::TreeTop::create(comp, TR::Node::createStore(ao1SymRef, ai1EndNode)));
          }
       addrDiffNode = TR::Node::create(TR::asub, 2, TR::Node::createLoad(ai2SymRef), TR::Node::createLoad(ai1SymRef));
-      block1stOverlapTrampoline->append(TR::TreeTop::create(comp, TR::Node::createStore(lo1SymRef, addrDiffNode)));
-      block1stOverlapTrampoline->append(TR::TreeTop::create(comp, TR::Node::create(TR::Goto, 0, block1stArrayset->getEntry())));
+      block2ndOverlapTrampoline->append(TR::TreeTop::create(comp, TR::Node::createStore(lo1SymRef, addrDiffNode)));
+      block2ndOverlapTrampoline->append(TR::TreeTop::create(comp, TR::Node::create(TR::Goto, 0, block1stArrayset->getEntry())));
 
       // 2nd Disjoint Trampoline
       if (ascending)
          {
-         block1stDisjointTrampoline->append(TR::TreeTop::create(comp, TR::Node::createStore(ao1SymRef, TR::Node::createLoad(ai2SymRef))));
+         block2ndDisjointTrampoline->append(TR::TreeTop::create(comp, TR::Node::createStore(ao1SymRef, TR::Node::createLoad(ai2SymRef))));
          }
-      block1stOverlapTrampoline->append(TR::TreeTop::create(comp, TR::Node::create(TR::Goto, 0, blockSetDisjointLength->getEntry())));
+      block2ndOverlapTrampoline->append(TR::TreeTop::create(comp, TR::Node::create(TR::Goto, 0, blockSetDisjointLength->getEntry())));
 
       // Set Disjoint Length
       blockSetDisjointLength->append(TR::TreeTop::create(comp, TR::Node::createStore(lo2SymRef, TR::Node::createLoad(liSymRef))));
