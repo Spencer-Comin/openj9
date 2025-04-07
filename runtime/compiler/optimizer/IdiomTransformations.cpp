@@ -8566,7 +8566,7 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
          {
          block2ndDisjointTrampoline->append(TR::TreeTop::create(comp, TR::Node::createStore(ao1SymRef, TR::Node::createLoad(ai2SymRef))));
          }
-      block2ndOverlapTrampoline->append(TR::TreeTop::create(comp, TR::Node::create(TR::Goto, 0, blockSetDisjointLength->getEntry())));
+      block2ndDisjointTrampoline->append(TR::TreeTop::create(comp, TR::Node::create(TR::Goto, 0, blockSetDisjointLength->getEntry())));
 
       // Set Disjoint Length
       blockSetDisjointLength->append(TR::TreeTop::create(comp, TR::Node::createStore(lo2SymRef, TR::Node::createLoad(liSymRef))));
