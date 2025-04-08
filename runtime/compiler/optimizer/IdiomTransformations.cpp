@@ -8579,12 +8579,12 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
       // 1st Arrayset
       TR::Node *arrayset = TR::Node::create(TR::arrayset, 3, TR::Node::createLoad(ao1SymRef), TR::Node::createLoad(vo1SymRef), TR::Node::createLoad(lo1SymRef));
       arrayset->setSymbolReference(arraysetSymRef);
-      block1stArrayset->append(TR::TreeTop::create(comp, arrayset));
+      block1stArrayset->append(TR::TreeTop::create(comp, TR::Node::create(TR::treetop, 1, arrayset)));
 
       // 2nd Arrayset
       arrayset = TR::Node::create(TR::arrayset, 3, TR::Node::createLoad(ao2SymRef), TR::Node::createLoad(vo2SymRef), TR::Node::createLoad(liSymRef));
       arrayset->setSymbolReference(arraysetSymRef);
-      block2ndArrayset->append(TR::TreeTop::create(comp, arrayset));
+      block2ndArrayset->append(TR::TreeTop::create(comp, TR::Node::create(TR::treetop, 1, arrayset)));
 
       // Wire up blocks
       cfg->insertBefore(block2ndArrayset, blockEnd);
