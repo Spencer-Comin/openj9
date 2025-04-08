@@ -8405,6 +8405,7 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
       return result {outputNode, valueNode, lengthByteNode, loopIsIncrement};
       };
 
+   TR::Block *blockStart = TR::Block::createEmptyBlock(trNode, comp, block->getFrequency(), block);
    TR::Block *blockEnd = TR::Block::createEmptyBlock(trNode, comp, block->getFrequency(), block);
 
    TR::CFG *cfg = comp->getFlowGraph();
@@ -8426,9 +8427,10 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
 
       TR::Node * arrayset = TR::Node::create(TR::arrayset, 3, nodes.outputNode, nodes.valueNode, nodes.lengthByteNode);
       arrayset->setSymbolReference(arraysetSymRef);
-      block->append(TR::TreeTop::create(comp, arrayset));
+      blockStart->append(TR::TreeTop::create(comp, arrayset));
 
-      cfg->insertBefore(block, blockEnd);
+      cfg->insertBefore(blockStart, blockEnd);
+      trans->setSuccessorEdge(blockStart, blockEnd);
       }
    else // storeCount == 2
       {
@@ -8486,12 +8488,12 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
       TR::Block *block2ndArrayset = TR::Block::createEmptyBlock(trNode, comp, freq2ndArrayset, block);
 
       // Start
-      block->append(TR::TreeTop::create(comp, TR::Node::createStore(ai1SymRef, firstNodes.outputNode)));
-      block->append(TR::TreeTop::create(comp, TR::Node::createStore(ai2SymRef, secondNodes.outputNode)));
-      block->append(TR::TreeTop::create(comp, TR::Node::createStore(vi1SymRef, firstNodes.valueNode)));
-      block->append(TR::TreeTop::create(comp, TR::Node::createStore(vi2SymRef, secondNodes.valueNode)));
-      block->append(TR::TreeTop::create(comp, TR::Node::createStore(liSymRef, firstNodes.lengthByteNode)));
-      block->append(TR::TreeTop::create(comp, TR::Node::createif(TR::ifacmpeq, firstNodes.outputNode, secondNodes.outputNode, blockFullOverlap->getEntry())));
+      blockStart->append(TR::TreeTop::create(comp, TR::Node::createStore(ai1SymRef, firstNodes.outputNode)));
+      blockStart->append(TR::TreeTop::create(comp, TR::Node::createStore(ai2SymRef, secondNodes.outputNode)));
+      blockStart->append(TR::TreeTop::create(comp, TR::Node::createStore(vi1SymRef, firstNodes.valueNode)));
+      blockStart->append(TR::TreeTop::create(comp, TR::Node::createStore(vi2SymRef, secondNodes.valueNode)));
+      blockStart->append(TR::TreeTop::create(comp, TR::Node::createStore(liSymRef, firstNodes.lengthByteNode)));
+      blockStart->append(TR::TreeTop::create(comp, TR::Node::createif(TR::ifacmpeq, firstNodes.outputNode, secondNodes.outputNode, blockFullOverlap->getEntry())));
 
       // Order Check
       blockOrderCheck->append(TR::TreeTop::create(comp, TR::Node::createif(TR::ifacmplt, TR::Node::createLoad(ai1SymRef), TR::Node::createLoad(ai2SymRef), block2ndOverlapCheck->getEntry())));
@@ -8596,7 +8598,7 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
       cfg->insertBefore(block1stDisjointTrampoline, block1stOverlapTrampoline);
       cfg->insertBefore(block1stOverlapCheck, block1stDisjointTrampoline);
       cfg->insertBefore(blockOrderCheck, block1stOverlapCheck);
-      cfg->insertBefore(block, blockOrderCheck);
+      cfg->insertBefore(blockStart, blockOrderCheck);
       }
 
    TR::Node * indVarUpdateNode = TR::Node::createStore(indexVarSymRef, computeIndex->duplicateTree());
@@ -8609,8 +8611,11 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
       blockEnd->append(indVar1UpdateTreeTop);
       }
 
+   cfg->join(block, blockStart);
+
    blockEnd = trans->insertAfterNodes(blockEnd);
 
+   trans->setSuccessorEdge(block, blockStart);
    trans->setSuccessorEdge(blockEnd, target);
 
    return true;
