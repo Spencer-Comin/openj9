@@ -8420,7 +8420,7 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
       cfg->addNode(blockEnd);
       }
 
-   const TR::SymbolReference *arraysetSymRef = comp->getSymRefTab()->findOrCreateArraySetSymbol();
+   TR::SymbolReference const *arraysetSymRef = comp->getSymRefTab()->findOrCreateArraySetSymbol();
    if (storeCount == 1)
       {
       auto nodes = findArraySetNodes(iteratorStores.getFirst());
