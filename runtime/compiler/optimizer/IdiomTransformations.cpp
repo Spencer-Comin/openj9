@@ -8420,7 +8420,7 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
       cfg->addNode(blockEnd);
       }
 
-   TR::SymbolReference *arraysetSymRef = comp->getSymRefTab()->findOrCreateArraySetSymbol();
+   const TR::SymbolReference *arraysetSymRef = comp->getSymRefTab()->findOrCreateArraySetSymbol();
    if (storeCount == 1)
       {
       auto nodes = findArraySetNodes(iteratorStores.getFirst());
@@ -8451,7 +8451,7 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
       TR::SymbolReference *ai1SymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), TR::Address);
       TR::SymbolReference *ai2SymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), TR::Address);
       TR::SymbolReference *vi1SymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), firstNodes.valueNode->getDataType());
-      TR::SymbolReference *vi2SymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), firstNodes.valueNode->getDataType());
+      TR::SymbolReference *vi2SymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), firstNodes.valueNode->getDataType()); // TODO: assert(firstNodes.valueNode->getDataType() == secondNodes.valueNode->getDataType())
       TR::SymbolReference *liSymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), longOffsets ? TR::Int64 : TR::Int32);
 
       TR::SymbolReference *ao1SymRef = comp->getSymRefTab()->createTemporary(comp->getMethodSymbol(), TR::Address);
@@ -8466,10 +8466,10 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
       const float overlappingArraysProbability = 0.01;
 
       int freqStart = block->getFrequency();
-      int freqFullOverlap = (int)(equalArraysProbability * freqStart);
+      int freqFullOverlap = (int) std::ceil(equalArraysProbability * freqStart);
       int freqOrderCheck = freqStart - freqFullOverlap;
       int freqOverlapCheck = freqOrderCheck/2;
-      int freqPartialOverlap = (int)(overlappingArraysProbability * freqOverlapCheck);
+      int freqPartialOverlap = (int) std::ceil(overlappingArraysProbability * freqOverlapCheck);
       int freqDisjointTrampoline = freqOverlapCheck - freqPartialOverlap;
       int freqDisjointLength = 2 * freqDisjointTrampoline;
       int freq1stArrayset = freqOrderCheck;
@@ -8599,19 +8599,6 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
       cfg->insertBefore(block1stOverlapCheck, block1stDisjointTrampoline);
       cfg->insertBefore(blockOrderCheck, block1stOverlapCheck);
       cfg->insertBefore(blockStart, blockOrderCheck);
-
-      trans->setSuccessorEdges(blockStart, blockOrderCheck, blockFullOverlap);
-      trans->setSuccessorEdges(blockOrderCheck, block1stOverlapCheck, block2ndOverlapCheck);
-      trans->setSuccessorEdges(block1stOverlapCheck, block1stDisjointTrampoline, block1stOverlapTrampoline);
-      trans->setSuccessorEdge(block1stDisjointTrampoline, block1stOverlapTrampoline);
-      trans->setSuccessorEdge(block1stOverlapTrampoline, block2ndOverlapCheck);
-      trans->setSuccessorEdges(block2ndOverlapCheck, block2ndDisjointTrampoline, block2ndOverlapTrampoline);
-      trans->setSuccessorEdge(block2ndDisjointTrampoline, block2ndOverlapTrampoline);
-      trans->setSuccessorEdge(block2ndOverlapTrampoline, blockFullOverlap);
-      trans->setSuccessorEdge(blockFullOverlap, blockSetDisjointLength);
-      trans->setSuccessorEdge(blockSetDisjointLength, block1stArrayset);
-      trans->setSuccessorEdge(block1stArrayset, block2ndArrayset);
-      trans->setSuccessorEdge(block2ndArrayset, blockEnd);
       }
 
    TR::Node * indVarUpdateNode = TR::Node::createStore(indexVarSymRef, computeIndex->duplicateTree());
