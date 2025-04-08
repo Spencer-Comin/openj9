@@ -8616,7 +8616,7 @@ CISCTransform2ArraySet(TR_CISCTransformer *trans)
    blockEnd = trans->insertAfterNodes(blockEnd);
 
    // trans->setSuccessorEdge(block, blockStart);
-   trans->setSuccessorEdge(blockEnd, target);
+   // trans->setSuccessorEdge(blockEnd, target);
 
    return true;
    }
