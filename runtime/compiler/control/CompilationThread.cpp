@@ -9085,6 +9085,7 @@ TR::CompilationInfoPerThreadBase::wrappedCompile(J9PortLibrary *portLib, void * 
                // However, we should perform such expensive opts for AOT compilations or precheckpoint or under -Xtune:throughput
                if (options->getOptLevel() <= warm)
                   {
+                  static const bool ignoreAggressiveThroughput = feGetEnv("TR_IgnoreAggressiveThroughputForEnableExpensiveOptsAtWarm") != NULL;
                   static char *forceExpensiveOptsAtWarm = feGetEnv("TR_EnableExpensiveOptsAtWarm");
                   bool enableExpensiveOptsAtWarm = forceExpensiveOptsAtWarm || // override
                           (vm->isAOT_DEPRECATED_DO_NOT_USE() && !that->_compInfo.isJVMStarved()) || // AOT compilations, but not under starvation conditions
@@ -9092,7 +9093,7 @@ TR::CompilationInfoPerThreadBase::wrappedCompile(J9PortLibrary *portLib, void * 
                           (jitConfig->javaVM->internalVMFunctions->isNonPortableRestoreMode(vmThread) &&
                           jitConfig->javaVM->internalVMFunctions->isCheckpointAllowed(jitConfig->javaVM)) ||
 #endif /* defined(J9VM_OPT_CRIU_SUPPORT) */
-                          TR::Options::getAggressivityLevel() == TR::Options::TR_AggresivenessLevel::AGGRESSIVE_THROUGHPUT;
+                          (TR::Options::getAggressivityLevel() == TR::Options::TR_AggresivenessLevel::AGGRESSIVE_THROUGHPUT && !ignoreAggressiveThroughput);
                   if (enableExpensiveOptsAtWarm)
                      {
                      options->setOption(TR_NotCompileTimeSensitive);
@@ -9124,7 +9125,9 @@ TR::CompilationInfoPerThreadBase::wrappedCompile(J9PortLibrary *portLib, void * 
             TR_ASSERT(TR::comp() == NULL, "there seems to be a current TLS TR::Compilation object %p for this thread. At this point there should be no current TR::Compilation object", TR::comp());
 
             // Under -Xtune:throughput we allow huge methods for compilations above warm
+            static const bool ignoreAggressiveThroughput = feGetEnv("TR_IgnoreAggressiveThroughputForProcessHugeMethods") != NULL;
             if (TR::Options::getAggressivityLevel() ==  TR::Options::TR_AggresivenessLevel::AGGRESSIVE_THROUGHPUT &&
+                !ignoreAggressiveThroughput &&
                 options->getOptLevel() > warm &&
                 !options->getOption(TR_ProcessHugeMethods))
                {
@@ -9283,7 +9286,7 @@ TR::CompilationInfoPerThreadBase::wrappedCompile(J9PortLibrary *portLib, void * 
          if (compiler)
             {
             bool isJSR292 = TR::CompilationInfo::isJSR292(details.getMethod());
-
+            static const bool ignoreAggressiveThroughput = feGetEnv("TR_IgnoreAggressiveThroughputForIncreaseScratchSpace") != NULL;
             // Check if the method to be compiled is a JSR292 method
             if (isJSR292)
                {
@@ -9302,6 +9305,7 @@ TR::CompilationInfoPerThreadBase::wrappedCompile(J9PortLibrary *portLib, void * 
                }
             // Under -Xtune:throughput, increase the scratch space limit for hot/scorching compilations
             else if (TR::Options::getAggressivityLevel() ==  TR::Options::TR_AggresivenessLevel::AGGRESSIVE_THROUGHPUT &&
+                     !ignoreAggressiveThroughput &&
                      compiler->getOptions()->getOptLevel() > warm &&
                      TR::Options::getScratchSpaceLimitForHotCompilations() > proposedScratchMemoryLimit) // Make sure we don't decrease the value proposed so far
                {

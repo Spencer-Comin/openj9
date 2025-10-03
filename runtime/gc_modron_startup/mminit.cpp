@@ -886,13 +886,14 @@ gcInitializeCalculatedValues(J9JavaVM *javaVM, IDATA* memoryParameters)
 	 */
 	UDATA initialXmsValueMax = 8 * 1024 * 1024;
 	UDATA initialXmsValueMin = 8 * 1024 * 1024;
+	static const bool ignoreXTune = getenv("TR_IgnoreXtuneThroughputForGCInitializeCalculatedValues") != NULL;
 	if (extensions->isSegregatedHeap() || extensions->isMetronomeGC()) {
 		/* TODO aryoung: eventually segregated heaps will allow heap expansion, although metronome
 		 * itself will still require a fully expanded heap on startup
 		 */
 		initialXmsValueMax = J9_MEMORY_MAX;
 		initialXmsValueMin = UDATA_MAX;
-	} else if (J9_ARE_ANY_BITS_SET(javaVM->extendedRuntimeFlags2, J9_EXTENDED_RUNTIME2_TUNE_THROUGHPUT)) {
+	} else if (J9_ARE_ANY_BITS_SET(javaVM->extendedRuntimeFlags2, J9_EXTENDED_RUNTIME2_TUNE_THROUGHPUT) && !ignoreXTune) {
 		/* For -Xtune:throughput we want to set Xms=Xmx */
 		initialXmsValueMax = extensions->memoryMax;
 		initialXmsValueMin = extensions->memoryMax;
