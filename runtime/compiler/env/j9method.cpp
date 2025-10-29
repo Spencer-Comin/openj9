@@ -3040,6 +3040,11 @@ void TR_ResolvedJ9Method::construct()
       {x(TR::sun_misc_Unsafe_getAndAddLong,                 "getAndAddLong",     "(Ljava/lang/Object;JJ)J")},
       {x(TR::sun_misc_Unsafe_getAndSetLong,                 "getAndSetLong",     "(Ljava/lang/Object;JJ)J")},
 
+      {x(TR::jdk_internal_misc_Unsafe_getAndAddByte,        "getAndAddByte",     "(Ljava/lang/Object;JB)B")},
+      {x(TR::jdk_internal_misc_Unsafe_getAndSetByte,        "getAndSetByte",     "(Ljava/lang/Object;JB)B")},
+      {x(TR::jdk_internal_misc_Unsafe_getAndAddShort,       "getAndAddShort",    "(Ljava/lang/Object;JS)S")},
+      {x(TR::jdk_internal_misc_Unsafe_getAndSetShort,       "getAndSetShort",    "(Ljava/lang/Object;JS)S")},
+
       {x(TR::sun_misc_Unsafe_putBooleanOrdered_jlObjectJZ_V,       "putOrderedBoolean", "(Ljava/lang/Object;JZ)V")},
       {x(TR::sun_misc_Unsafe_putByteOrdered_jlObjectJB_V,          "putOrderedByte",    "(Ljava/lang/Object;JB)V")},
       {x(TR::sun_misc_Unsafe_putCharOrdered_jlObjectJC_V,          "putOrderedChar",    "(Ljava/lang/Object;JC)V")},
@@ -5173,6 +5178,11 @@ TR_ResolvedJ9Method::setRecognizedMethodInfo(TR::RecognizedMethod rm)
             case TR::sun_misc_Unsafe_getAndAddLong:
             case TR::sun_misc_Unsafe_getAndSetLong:
 
+            case TR::jdk_internal_misc_Unsafe_getAndAddByte:
+            case TR::jdk_internal_misc_Unsafe_getAndSetByte:
+            case TR::jdk_internal_misc_Unsafe_getAndAddShort:
+            case TR::jdk_internal_misc_Unsafe_getAndSetShort:
+
             case TR::java_lang_Math_sqrt:
             case TR::java_lang_StrictMath_sqrt:
             case TR::java_lang_Math_max_I:
@@ -6203,6 +6213,10 @@ TR_J9MethodBase::isUnsafePut(TR::RecognizedMethod rm)
       case TR::sun_misc_Unsafe_getAndAddLong:
       case TR::sun_misc_Unsafe_getAndSetInt:
       case TR::sun_misc_Unsafe_getAndSetLong:
+      case TR::jdk_internal_misc_Unsafe_getAndAddByte:
+      case TR::jdk_internal_misc_Unsafe_getAndSetByte:
+      case TR::jdk_internal_misc_Unsafe_getAndAddShort:
+      case TR::jdk_internal_misc_Unsafe_getAndSetShort:
       case TR::sun_misc_Unsafe_putAddress_JJ_V:
       case TR::jdk_internal_misc_Unsafe_putBooleanOpaque_jlObjectJZ_V:
       case TR::sun_misc_Unsafe_putBooleanOrdered_jlObjectJZ_V:

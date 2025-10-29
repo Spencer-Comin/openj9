@@ -457,6 +457,11 @@
    sun_misc_Unsafe_getAndAddLong,
    sun_misc_Unsafe_getAndSetLong,
 
+   jdk_internal_misc_Unsafe_getAndAddByte,
+   jdk_internal_misc_Unsafe_getAndSetByte,
+   jdk_internal_misc_Unsafe_getAndAddShort,
+   jdk_internal_misc_Unsafe_getAndSetShort,
+
    sun_misc_Unsafe_putBooleanOrdered_jlObjectJZ_V,
    sun_misc_Unsafe_putByteOrdered_jlObjectJB_V,
    sun_misc_Unsafe_putCharOrdered_jlObjectJC_V,
