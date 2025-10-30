@@ -1514,12 +1514,12 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
 
    bool skipZeroInit = fej9->tlhHasBeenCleared() || node->canSkipZeroInitialization();
    TR::Register *zeroReg = skipZeroInit ? NULL : cg->allocateRegister();
-   TR::Register *tmpReg = skipZeroInit ? NULL : cg->allocateRegister();
 
    uintptr_t classOffset = TR::Compiler->om.offsetOfObjectVftField();
    uintptr_t sizeOffset = fej9->getOffsetOfContiguousArraySizeField();
 
    // load dimensions and class
+   TR::Register *nDimsRegister = skipZeroInit ? cg->intClobberEvaluate(nDimsNode) : cg->evaluate(nDimsNode);
    TR::Register *dimsPtrReg = cg->evaluate(sizeArrNode);
    TR::Register *secondDimLenReg = cg->allocateRegister();
    TR::Register *classReg = cg->longClobberEvaluate(classNode);
@@ -1575,7 +1575,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    generateRegRegInstruction(TR::InstOpCode::ADD8RegReg, node, allocEndReg, leafArrReg, cg);
    // skip removing extra leaf padding, allocating a few extra bytes won't hurt, right?
 
-   // if end of allocation > heap top jump to snippet to handle heap overflow
+   // if end of allocation > heap top, jump to snippet to handle heap overflow
    TR::LabelSymbol *oolFailLabel = generateLabelSymbol(cg);
    TR::LabelSymbol *doneLabel = generateLabelSymbol(cg);
    TR_OutlinedInstructions *outlinedHelperCall = new (cg->trHeapMemory()) TR_OutlinedInstructions(node, TR::acall, spineArrReg, oolFailLabel, doneLabel, cg);
@@ -1596,7 +1596,8 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    if (!skipZeroInit)
       {
       generateRegRegInstruction(TR::InstOpCode::XOR4RegReg, node, zeroReg, zeroReg, cg);
-      generateRegRegInstruction(TR::InstOpCode::MOV8RegReg, node, tmpReg, leafArrReg, cg);
+      // nDimsRegister doesn't need to hold its value after oolFailLabel
+      generateRegRegInstruction(TR::InstOpCode::MOV8RegReg, node, nDimsRegister, leafArrReg, cg);
       // REPSTOSB fills rcx bytes at [rdi] with al
       // rcx = allocEndReg - leafArrReg
       // rdi = leafArrReg
@@ -1604,8 +1605,8 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
       generateRegRegInstruction(TR::InstOpCode::SUB8RegReg, node, allocEndReg, leafArrReg, cg);
       generateInstruction(TR::InstOpCode::REPSTOSB, node, cg);
       cg->stopUsingRegister(zeroReg);
-      cg->stopUsingRegister(tmpReg);
       }
+   cg->stopUsingRegister(nDimsRegister);
 
    // initialise spine array header
    generateMemRegInstruction(TR::InstOpCode::SMemReg(use64BitClasses), node, generateX86MemoryReference(spineArrReg, classOffset, cg), classReg, cg);
@@ -1668,7 +1669,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
 
    generateLabelInstruction(TR::InstOpCode::label, node, loopBottom, cg);
 
-   TR::RegisterDependencyConditions *deps = generateRegisterDependencyConditions(0, skipZeroInit ? 10 : 12, cg);
+   TR::RegisterDependencyConditions *deps = generateRegisterDependencyConditions(0, skipZeroInit ? 11 : 12, cg);
 
    deps->addPostCondition(dimsPtrReg, TR::RealRegister::NoReg, cg);
    deps->addPostCondition(firstDimLenReg, TR::RealRegister::NoReg, cg);
@@ -1682,13 +1683,14 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
       {
       deps->addPostCondition(spineArrReg, TR::RealRegister::eax, cg);
       deps->addPostCondition(allocEndReg, TR::RealRegister::NoReg, cg);
+      deps->addPostCondition(nDimsRegister, TR::RealRegister::NoReg, cg);
       }
    else
       {
       deps->addPostCondition(zeroReg, TR::RealRegister::eax, cg);
       deps->addPostCondition(spineArrReg, TR::RealRegister::NoReg, cg);
       deps->addPostCondition(allocEndReg, TR::RealRegister::ecx, cg);
-      deps->addPostCondition(tmpReg, TR::RealRegister::edi, cg);
+      deps->addPostCondition(nDimsRegister, TR::RealRegister::edi, cg);
       }
 
    deps->addPostCondition(vmThreadReg, TR::RealRegister::ebp, cg);
