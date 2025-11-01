@@ -1450,302 +1450,267 @@ TR::Register *J9::X86::TreeEvaluator::newEvaluator(TR::Node *node, TR::CodeGener
    return targetRegister;
    }
 
-static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::CodeGenerator *cg,  int32_t leafArrayElementSize)
+static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::CodeGenerator *cg, int32_t componentSize)
    {
+   #define iComment(str) if (debug) debug->addInstructionComment(cursor, (const_cast<char*>(str)));
    TR::Compilation *comp = cg->comp();
-
-   TR::Node *sizeArrNode = node->getFirstChild();      // ptr to array of sizes, one for each dimension. Array construction stops at the outermost zero size, if any
-   TR::Node *nDimsNode   = node->getSecondChild();     // number of dimensions - this is fixed in the bytecode, so compile time constant 2
-   TR::Node *classNode   = node->getThirdChild();      // class of the outermost dimension
-
    TR_J9VMBase *fej9 = comp->fej9();
+   TR::Instruction *cursor = NULL;
+   int32_t elementSize = TR::Compiler->om.sizeofReferenceField();
 
-   /*
-    * For a new m*n array of X we allocate the first dimension array spine immediately followed
-    * by the second dimension array leaves, inserting padding to align the arrays. This looks like the following:
-    *
-    *    |-------------------------|
-    *    | n empty X array slots   | \
-    *    |-------------------------|  |
-    *    | mth leaf array header   |  |
-    *    |-------------------------|  |
-    *    | padding for alignment   |  |
-    *    |-------------------------|  |
-    *                ...              |
-    *    |-------------------------|  | m * (header bytes + n * X bytes + leaf padding bytes) - leaf padding bytes
-    *    | n empty X array slots   |  |
-    *    |-------------------------|  |
-    *    | 2nd leaf array header   |  |
-    *    |-------------------------|  |
-    *    | padding for alignment   |  |
-    *    |-------------------------|  |
-    *    | n empty X array slots   |  |
-    *    |-------------------------|  |
-    *    | 1st leaf array header   | /
-    *    |-------------------------|
-    *    | padding for alignment   | \
-    *    |-------------------------|  |
-    *    | m reference array slots |  | spine padding bytes + header bytes + m * reference bytes
-    *    |-------------------------|  |
-    *    | spine array header      | /
-    *    |-------------------------|
-    *    | padding for alignment   | vmThread->heapAlloc padding bytes
-    *    |-------------------------|
-    *
-    * If the whole allocation won't fit between vmThread->heapAlloc and vmThread->heapTop,
-    * call the snippet instead which will handle the heap overflow.
-    *
-    * After allocating, initialise
-    *   - Spine array header with class and size
-    *   - Spine array slots with references to leaf arrays
-    *   - Leaf array headers
-    */
+   TR_ASSERT_FATAL(comp->target().is64Bit(), "multianewArrayEvaluator is only supported on 64-bit JVMs!");
 
-   // alignment requirement
-   int32_t alignmentInBytes = TR::Compiler->om.getObjectAlignmentInBytes();
-   // a length>0 array object would *not* require alignment if both a single element
-   // and the header are already the exact multiple of alignment; otherwise alignment is needed
-   uintptr_t contiguousArrayHeaderSize = TR::Compiler->om.contiguousArrayHeaderSizeInBytes();
-   bool needsAlignLeaf = (OMR::align(leafArrayElementSize, alignmentInBytes) != leafArrayElementSize);
-   bool needsAlignHeader = (contiguousArrayHeaderSize
-      != OMR::align(contiguousArrayHeaderSize, alignmentInBytes));
+   int32_t numDimensions = node->getSecondChild()->get32bitIntegralValue();
 
-   bool use64BitClasses = !TR::Compiler->om.generateCompressedObjectHeaders();
+   TR_ASSERT_FATAL(numDimensions == 2, "Can not allocate %d dimensional arrays!", numDimensions);
+   TR_ASSERT_FATAL((componentSize == 1 || componentSize == 2 || componentSize == 4 || componentSize == 8),
+      "Received componentSize= %d is not valid!", componentSize);
 
-   bool skipZeroInit = fej9->tlhHasBeenCleared() || node->canSkipZeroInitialization();
-   TR::Register *zeroReg = skipZeroInit ? NULL : cg->allocateRegister();
-
-   uintptr_t classOffset = TR::Compiler->om.offsetOfObjectVftField();
-   uintptr_t sizeOffset = fej9->getOffsetOfContiguousArraySizeField();
-
-   // load dimensions and class
-   TR::Register *nDimsRegister = skipZeroInit ? cg->intClobberEvaluate(nDimsNode) : cg->evaluate(nDimsNode);
-   TR::Register *dimsPtrReg = cg->evaluate(sizeArrNode);
-   TR::Register *secondDimLenReg = cg->allocateRegister();
-   TR::Register *classReg = cg->longClobberEvaluate(classNode);
-   TR::Register *firstDimLenReg = cg->allocateRegister();
-
-   static const bool breakOnInlineGenerate2DArray = feGetEnv("TR_BreakOnInlineGenerate2DArray") != NULL;
-   if (breakOnInlineGenerate2DArray)
-      generateInstruction(TR::InstOpCode::INT3, node, cg);
-
-   generateRegMemInstruction(TR::InstOpCode::MOVSXReg8Mem4, node, secondDimLenReg, generateX86MemoryReference(dimsPtrReg, 0, cg), cg);
-   generateRegMemInstruction(TR::InstOpCode::MOVSXReg8Mem4, node, firstDimLenReg, generateX86MemoryReference(dimsPtrReg, 4, cg), cg);
-
-   // calculate spine array size = header bytes + first dim * reference bytes
-   TR::Register *spineSizeReg = cg->allocateRegister();
-   int32_t spineArraySlotShift = trailingZeroes(TR::Compiler->om.sizeofReferenceField());
-   generateRegMemInstruction(TR::InstOpCode::LEARegMem(), node, spineSizeReg,
-                             generateX86MemoryReference(NULL, firstDimLenReg, spineArraySlotShift, contiguousArrayHeaderSize, cg), cg);
-
-   // calculate leaf array size = header bytes + second dim * X bytes
-   TR::Register *leafSizeReg = cg->allocateRegister();
-   generateRegMemInstruction(TR::InstOpCode::LEARegMem(), node, leafSizeReg,
-                             generateX86MemoryReference(NULL, secondDimLenReg, trailingZeroes(leafArrayElementSize), contiguousArrayHeaderSize, cg), cg);
-
-
-   // pad array sizes so following leaf array is aligned
-   if (needsAlignLeaf)
+   if (comp->getOption(TR_TraceCG))
       {
-      generateRegImmInstruction(TR::InstOpCode::ADD4RegImms, node, spineSizeReg, alignmentInBytes-1, cg);
-      generateRegImmInstruction(TR::InstOpCode::AND4RegImm4, node, spineSizeReg, -alignmentInBytes, cg);
-
-      generateRegImmInstruction(TR::InstOpCode::ADD4RegImms, node, leafSizeReg, alignmentInBytes-1, cg);
-      generateRegImmInstruction(TR::InstOpCode::AND4RegImm4, node, leafSizeReg, -alignmentInBytes, cg);
+      traceMsg(comp, "Inline allocation for multianewarray with element size: %d and leaf component size: %d", elementSize, componentSize);
       }
 
-   // load heap alloc and pad so spine array is aligned
-   TR::Register *vmThreadReg = cg->getVMThreadRegister();
-   TR::Register *spineArrReg = cg->allocateRegister();
-   generateRegMemInstruction(TR::InstOpCode::LRegMem(), node, spineArrReg, generateX86MemoryReference(vmThreadReg, offsetof(J9VMThread, heapAlloc), cg), cg);
-   if (needsAlignHeader)
+   // Register setup
+   TR::Register *dimsPtrReg = cg->evaluate(node->getFirstChild());
+   TR::Register *sizeReg = cg->allocateRegister();
+   TR::RegisterDependencyConditions *dependencies = generateRegisterDependencyConditions(0,9,cg);
+   dependencies->addPostCondition(dimsPtrReg, TR::RealRegister::AssignAny);
+
+   // Calculate size
+   int32_t alignmentConstant = TR::Compiler->om.getObjectAlignmentInBytes();
+   cursor = generateRegImmInstruction(TR::InstOpCode::MOV8RegImm4, node, sizeReg, alignmentConstant, cg);
+   iComment("Load discontiguous array size.");
+
+   // Although the number of dimensions remains constant and is not utilized through a register in the mainline ICF,
+   // it is referenced in the out-of-line (OOL) code section to set up call parameters. If the node has multiple
+   // reference counts, and it is not explicitly attached to the mainline dependency conditions, there is a risk
+   // that it may be spilled in the OOL path and reverse-spilled in another path. This can lead to unexpected behavior.
+   // To mitigate this, ensure that the dimension node is evaluated and explicitly attached to the mainline dependency.
+   TR::Register *dimReg = cg->evaluate(node->getSecondChild());
+   dependencies->addPostCondition(dimReg, TR::RealRegister::AssignAny);
+
+   TR::Register *classReg = cg->gprClobberEvaluate(node->getThirdChild());
+   dependencies->addPostCondition(classReg, TR::RealRegister::AssignAny);
+
+   TR::Register *dim1SizeReg = cg->allocateRegister();
+   dependencies->addPostCondition(dim1SizeReg, TR::RealRegister::AssignAny);
+   cursor = generateRegMemInstruction(TR::InstOpCode::L4RegMem, node, dim1SizeReg,
+                             generateX86MemoryReference(dimsPtrReg, 0, cg), cg);
+   cursor = generateRegImmInstruction(TR::InstOpCode::CMP4RegImm4, node, dim1SizeReg, 0, cg);
+   iComment("Load 1st dim length.");
+
+   // Start of the internal control flow.
+   TR::LabelSymbol *controlFlowStartLabel = generateLabelSymbol(cg);
+   controlFlowStartLabel->setStartInternalControlFlow();
+   cursor = generateLabelInstruction(TR::InstOpCode::label, node, controlFlowStartLabel, cg);
+   // If first dimension length is zero, there is only one discontiguous array for dim 1.
+   // Zero size arrays are considered "discontiguous" and the "mustBeZero" field of discontiguous arrays must be located where the
+   //  "size" field of contiguous arrays is.
+   // To handle zero length arrays, discontiguous header size is loaded in size register so we can bypass the size calculation if
+   //  the length is zero. Otherwise, the size is calculated and overwrite the value in size register.
+   // Check runtime/oti/j9nonbuilder.h for layout details. Simplified layout would look like:
+   // Discontiguous array layout: |  class  | mustBeZero |  size   | ...
+   // Contiguous array layout:    |  class  |    size    | ...
+   TR::LabelSymbol *heapTopTestLabel = generateLabelSymbol(cg);
+   cursor = generateLabelInstruction(TR::InstOpCode::JNE4, node, heapTopTestLabel, cg);
+   // Make sure first dim length is not negative.
+   TR::LabelSymbol *inlineAllocFailLabel = generateLabelSymbol(cg);
+   cursor = generateLabelInstruction(TR::InstOpCode::JL4, node, inlineAllocFailLabel, cg);
+
+   TR::Register *dim2SizeReg = cg->allocateRegister();
+   dependencies->addPostCondition(dim2SizeReg, TR::RealRegister::AssignAny);
+   cursor = generateRegMemInstruction(TR::InstOpCode::L4RegMem, node, dim2SizeReg,
+                             generateX86MemoryReference(dimsPtrReg, 0, cg), cg);
+   cursor = generateRegImmInstruction(TR::InstOpCode::CMP4RegImm4, node, dim2SizeReg, 0, cg);
+   iComment("Load 2nd dim length ptr.");
+   // The size of zero length array is already loaded in size register. Jump over the array size calculation instructions if length is 0.
+   TR::LabelSymbol *zeroSecondDimLabel = generateLabelSymbol(cg);
+   // Load int32 second dim length to a 64 bit register and set condition mask.
+      cursor = generateRegMemInstruction(TR::InstOpCode::MOVZX8Reg4Mem, node, dim2SizeReg,
+                             generateX86MemoryReference(dimsPtrReg, 0, cg), cg);
+
+   if (componentSize == 1)
       {
-      generateRegImmInstruction(TR::InstOpCode::ADD8RegImms, node, spineArrReg, alignmentInBytes-1, cg);
-      generateRegImmInstruction(TR::InstOpCode::AND8RegImm4, node, spineArrReg, -alignmentInBytes, cg);
+      cursor = generateRegImmInstruction(TR::InstOpCode::CMP4RegImm4, node, dim2SizeReg, 0, cg);
+      iComment("Load 2nd dim length.");
+      }
+   else
+      {
+      // If any bits will overflow the shift, call the helper. This way we can make sure that the
+      // size of all elements (length * component size) in the leaf array is positive and within
+      // INT32_MAX range. It limits the allocation size but simplifies the instruction selection
+      // and guarantee no overflow in the following instructions. Assuming allocation of 2D arrays
+      // with leaf size > INT32_MAX and having large enough TLH to allocate inline is not frequent.
+      cursor = generateRegImmInstruction(TR::InstOpCode::CMP4RegImm4, node, dim2SizeReg, ~(0xFFFF_FFFFU >> trailingZeroes(componentSize)), cg);
+      cursor = generateLabelInstruction(TR::InstOpCode::JA4, node, inlineAllocFailLabel, cg);
+
+      cursor = generateRegImmInstruction(TR::InstOpCode::SHL4RegImm1, node, dim2SizeReg, trailingZeroes(componentSize), cg);
+      iComment("Load 2nd dim length.");
+      }
+   // Bypass dim2 size calculation if the size is zero.
+   cursor = generateLabelInstruction(TR::InstOpCode::JE4, node, zeroSecondDimLabel, cg);
+   // Call helper if the length is negative or length * componentSize is larger that INT32_MAX (overflow).
+   cursor = generateLabelInstruction(TR::InstOpCode::JL4, node, inlineAllocFailLabel, cg);
+
+   int32_t headerSize= TR::Compiler->om.contiguousArrayHeaderSizeInBytes();
+   // size = (size + alignmentConstant - 1) & -alignmentConstant equation round up the size to a factor of alignmentConstant.
+   bool alignSecondDim = !(OMR::aligned(headerSize, alignmentConstant) && OMR::aligned(componentSize, alignmentConstant));
+   cursor = generateRegImmInstruction(TR::InstOpCode::ADD8RegImm4, node, dim2SizeReg, alignSecondDim ? (headerSize + alignmentConstant - 1) : headerSize, cg);
+   if (alignSecondDim)
+      cursor = generateRegImmInstruction(TR::InstOpCode::AND1RegImm1, node, dim2SizeReg, -alignmentConstant, cg);
+   cursor = generateRegRegInstruction(TR::InstOpCode::MOV8RegReg, node, sizeReg, dim2SizeReg, cg);
+
+   cursor = generateLabelInstruction(TR::InstOpCode::label, node, zeroSecondDimLabel, cg);
+   // If jumping from zero second dim match, set second dim size to discontiguous. Otherwise this won't change values.
+   cursor = generateRegRegInstruction(TR::InstOpCode::MOV8RegReg, node, dim2SizeReg, sizeReg, cg);
+   // Total size = (second dim size * number of second dim arrays) + first dim size.
+   // We limited the leaf array size to int32 when converted the length to size so no overflow is possible here.
+   cursor = generateRegRegInstruction(TR::InstOpCode::IMUL4Reg, node, sizeReg, dim1SizeReg, cg);
+
+   // Size = (element size * dimension length) + header size. final size must get aligned.
+   bool alignFirstDim = !(OMR::aligned(headerSize, alignmentConstant) && OMR::aligned(elementSize, alignmentConstant));
+   cursor = generateRegMemInstruction(TR::InstOpCode::LEA8RegMem, node, dim1SizeReg,
+      generateX86MemoryReference(NULL, dim1SizeReg, trailingZeroes(elementSize), alignFirstDim ? (headerSize + alignmentConstant - 1) : headerSize, cg), cg);
+   if (alignFirstDim)
+      cursor = generateRegImmInstruction(TR::InstOpCode::AND1RegImm1, node, dim1SizeReg, -alignmentConstant);
+
+   // Add first dimension array size to sizeReg. Can not overflow.
+   cursor = generateRegRegInstruction(TR::InstOpCode::ADD8RegReg, node, sizeReg, dim1SizeReg, cg);
+   iComment("Total size in sizeReg.");
+
+   // heap top test
+   bool allocateFromNonZeroHeap = !comp->getOption(TR_DisableDualTLH) && node->canSkipZeroInitialization();
+   int32_t heapAllocOffset = allocateFromNonZeroHeap ? offsetof(J9VMThread, nonZeroHeapAlloc) : offsetof(J9VMThread, heapAlloc);
+   int32_t heapTopOffset = allocateFromNonZeroHeap ? offsetof(J9VMThread, nonZeroHeapTop) : offsetof(J9VMThread, heapTop);
+   TR::Register *resultReg = cg->allocateRegister();
+   cursor = generateLabelInstruction(TR::InstOpCode::label, node, heapTopTestLabel, cg);
+   TR::Register *vmThreadReg = cg->getMethodMetaDataRealRegister();
+   cursor = generateRegMemInstruction(TR::InstOpCode::L8RegMem, node, resultReg, generateS390MemoryReference(vmThreadReg, heapAllocOffset, cg), cg);
+   iComment("Set result reg.");
+   cursor = generateRegRegInstruction(TR::InstOpCode::ADD8RegReg, node, sizeReg, resultReg, cg);
+   // Only a positive number with no overflow is acceptable.
+   cursor = generateLabelInstruction(TR::InstOpCode::JS4, node, inlineAllocFailLabel, cg);
+   cursor = generateLabelInstruction(TR::InstOpCode::JO4, node, inlineAllocFailLabel, cg);
+   cursor = generateRegMemInstruction(TR::InstOpCode::CMP8RegMem, node, sizeReg, generateX86MemoryReference(vmThreadReg, heapTopOffset, cg), cg);
+
+   cursor = generateLabelInstruction(TR::InstOpCode::JG4, node, inlineAllocFailLabel, cg);
+
+   // Allocate object
+   // Update heap alloc
+   cursor = generateMemRegInstruction(TR::InstOpCode::S8MemReg, node, generateX86MemoryReference(vmThreadReg, heapAllocOffset, cg), sizeReg, cg);
+   TR::Register *scratchReg = cg->allocateRegister();
+
+   // zero initialize memory
+   bool needInitialization = !fej9->tlhHasBeenCleared() && !node->canSkipZeroInitialization();
+   if (needInitialization)
+      {
+      cursor = generateRegRegInstruction(TR::InstOpCode::SUB8RegReg, node, sizeReg, resultReg, cg);
+      iComment("start memory initialization.");
+
+      generateRegRegInstruction(TR::InstOpCode::XOR1RegReg, node, scratchReg, scratchReg, cg);
+      generateInstruction(TR::InstOpCode::REPSTOSB, node, cg);
+      // REPSTOSB fills rcx bytes at [rdi] with al and increments rdi by rcx
+      dependencies->addPostCondition(sizeReg, TR::RealRegister::ecx);
+      dependencies->addPostCondition(resultReg, TR::RealRegister::edi);
+      dependencies->addPostCondition(scratchReg, TR::RealRegister::eax);
+
+      // Recover resultReg
+      generateRegRegInstruction(TR::InstOpCode::SUB8RegReg, node, resultReg, sizeReg, cg);
+      }
+   else
+      {
+      dependencies->addPostCondition(sizeReg, TR::RealRegister::AssignAny);
+      dependencies->addPostCondition(resultReg, TR::RealRegister::AssignAny);
+      dependencies->addPostCondition(scratchReg, TR::RealRegister::AssignAny);
       }
 
-   // calculate start of first leaf array
-   TR::Register *leafArrReg = cg->allocateRegister();
-   generateRegMemInstruction(TR::InstOpCode::LEARegMem(), node, leafArrReg, generateX86MemoryReference(spineArrReg, spineSizeReg, 0, cg), cg);
+   // First dimension class and length
+   // Load first dim length
+   cursor = generateRegMemInstruction(TR::InstOpCode::L4MemReg, node, scratchReg, generateX86MemoryReference(dimsPtrReg, 0, cg), cg);
+   iComment("Start first dim alloc");
+   // First dim class and length:
+   bool compressedObjectHeaders = TR::Compiler->om.generateCompressedObjectHeaders();
+   cursor = generateMemRegInstruction(TR::InstOpCode::SMemReg(!compressedObjectHeaders), node,
+      generateX86MemoryReference(resultReg, static_cast<int32_t>(TR::Compiler->om.offsetOfObjectVftField()), cg), classReg, cg);
+   cursor = generateMemRegInstruction(TR::InstOpCode::S4MemReg, node,
+      generateX86MemoryReference(resultReg, static_cast<int32_t>(TR::Compiler->om.offsetOfContiguousArraySizeField()), cg), scratchReg, cg);
 
-   // calculate end of allocation = first leaf array address + (first dimension * size of leaf array) - leaf padding bytes
-   TR::Register *allocEndReg = cg->allocateRegister();
-   generateRegRegInstruction(TR::InstOpCode::MOVSXReg8Reg4, node, allocEndReg, leafSizeReg, cg);
-   generateRegRegInstruction(TR::InstOpCode::IMUL8RegReg, node, allocEndReg, firstDimLenReg, cg);
-   generateRegRegInstruction(TR::InstOpCode::ADD8RegReg, node, allocEndReg, leafArrReg, cg);
-   // skip removing extra leaf padding, allocating a few extra bytes won't hurt, right?
+   // Add leaf arrays (second dimension)
+   // If number of leaf arrays is zero, jump to the end.
+   // Load second dim length
+   TR::Register *scratch2Reg = cg->allocateRegister();
+   dependencies->addPostCondition(scratch2Reg, TR::RealRegister::AssignAny);
+   cursor = generateRegMemInstruction(TR::InstOpCode::L4MemReg, node, scratch2Reg, generateX86MemoryReference(dimsPtrReg, 4, cg), cg);
+   TR::LabelSymbol *controlFlowEndLabel = generateLabelInstruction(cg);
+   controlFlowEndLabel->setEndInternalControlFlow();
+   cursor = generateRegImmInstruction(TR::InstOpCode::CMP8RegImm4, node, scratch2Reg, 0, cg);
+   cursor = generateLabelInstruction(TR::InstOpCode::JE4, node, controlFlowEndLabel, cg);
 
-   // if end of allocation > heap top, jump to snippet to handle heap overflow
-   TR::LabelSymbol *oolFailLabel = generateLabelSymbol(cg);
-   TR::LabelSymbol *doneLabel = generateLabelSymbol(cg);
-   TR_OutlinedInstructions *outlinedHelperCall = new (cg->trHeapMemory()) TR_OutlinedInstructions(node, TR::acall, spineArrReg, oolFailLabel, doneLabel, cg);
+   cursor = generateRegMemInstruction(TR::InstOpCode::LEA8RegMem, node, dim1SizeReg, generateX86MemoryReference(dim1SizeReg, resultReg, 0, 0, cg), cg);
+   iComment("Load first leaf array address.");
+   // Load component class to class register.
+   cursor = generateRegMemInstruction(TR::InstOpCode::L8RegMem, node, classReg, generateX86MemoryReference(classReg, offsetof(J9ArrayClass, componentType), cg), cg);
+
+   // Load the address of the first element of the first dimension array in sizeReg.
+   cursor = generateRegMemInstruction(TR::InstOpCode::LEA8RegMem, node, sizeReg,
+      generateX86MemoryReference(resultReg, TR::Compiler->om.contiguousArrayHeaderSizeInBytes(), cg), cg);
+   // Start setting second dim:
+   // TODO: if class field and array length fit in GPR, pack together and save one store per loop
+   TR::LabelSymbol *secondDimLabel = generateLabelSymbol(cg);
+   cursor = generateLabelInstruction(TR::InstOpCode::label, node, secondDimLabel, cg);
+   // Store the class field.
+   cursor = generateMemRegInstruction(TR::InstOpCode::SMemReg(!compressedObjectHeaders), node,
+      generateX86MemoryReference(dim1SizeReg, static_cast<int32_t>(TR::Compiler->om.offsetOfObjectVftField()), cg), classReg, cg);
+   // Store the array length.
+   cursor = generateMemRegInstruction(TR::InstOpCode::S4MemReg, node,
+      generateX86MemoryReference(dim1SizeReg, static_cast<int32_t>(TR::Compiler->om.offsetOfContiguousArraySizeField()), cg), scratch2Reg, cg);
+   int32_t shiftAmount = TR::Compiler->om.compressedReferenceShift();
+   if (shiftAmount > 0)
+      {
+      // Calculate the compressed reference of leaf array in dimReg.
+      cursor = generateRegRegInstruction(TR::InstOpCode::MOV8RegReg, node, dimReg, dim1SizeReg, cg);
+      cursor = generateRegImmInstruction(TR::InstOpCode::SHR8RegImm1, node, dimReg, shiftAmount, cg);
+      // Store the compressed 32 bit leaf address in the relevant element of the first dim array.
+      cursor = generateMemRegInstruction(TR::InstOpCode::S4MemReg, node, generateX86MemoryReference(sizeReg, 0, cg), dimReg, cg);
+      }
+   else
+      {
+      // Store the leaf address in the relevant element of the first dim array.
+      cursor = generateMemRegInstruction(TR::InstOpCode::SMemReg(!compressedObjectHeaders), node, generateX86MemoryReference(sizeReg, 0, cg), dim1SizeReg, cg);
+      }
+
+   // Load the next leaf address in dim1SizeReg.
+   cursor = generateRegRegInstruction(TR::InstOpCode::ADD8RegReg, node, dim1SizeReg, dim2SizeReg, cg);
+   // Load the next element address of the first dim array in sizeReg.
+   cursor = generateRegMemInstruction(TR::InstOpCode::LEA8RegMem, node, sizeReg, generateX86MemoryReference(sizeReg, elementSize, cg), cursor);
+   cursor = generateRegInstruction(TR::InstOpCode::DEC8Reg, node, scratchReg, cg);
+   cursor = generateLabelInstruction(TR::InstOpCode::JZ4, node, secondDimLabel, cg);
+   iComment("Allocation done!");
+
+   // Merge inline and helper results
+   cursor = generateLabelInstruction(TR::InstOpCode::label, node, controlFlowEndLabel, dependencies, cg);
+   // Can not have a collected reference register with unset value when helper is called. That would cause wrong GC register map.
+   TR::Register *collectedReferenceResultReg = cg->allocateCollectedReferenceRegister();
+   cursor = generateRegRegInstruction(TR::InstOpCode::MOV8RegReg, node, collectedReferenceResultReg, resultReg, cg);
+   iComment("Copy tmp result to final result.");
+
+   // OOL helper
+   TR_OutlinedInstructions *outlinedHelperCall = new (cg->trHeapMemory()) TR_OutlinedInstructions(node, TR::acall, resultReg, inlineAllocFailLabel, controlFlowEndLabel, cg);
    cg->getOutlinedInstructionsList().push_front(outlinedHelperCall);
 
-   generateRegMemInstruction(TR::InstOpCode::CMPRegMem(), node, allocEndReg, generateX86MemoryReference(vmThreadReg, offsetof(J9VMThread, heapTop), cg), cg);
+   // Done
+   cg->stopUsingRegister(sizeReg);
+   cg->stopUsingRegister(dim1SizeReg);
+   cg->stopUsingRegister(dim2SizeReg);
+   cg->stopUsingRegister(scratchReg);
+   cg->stopUsingRegister(scratch2Reg);
+   cg->stopUsingRegister(resultReg);
 
-   TR::LabelSymbol *startControlFlow = generateLabelSymbol(cg);
-   generateLabelInstruction(TR::InstOpCode::label, node, startControlFlow, cg);
-   startControlFlow->setStartInternalControlFlow();
+   node->setRegister(collectedReferenceResultReg);
+   return collectedReferenceResultReg;
 
-   generateLabelInstruction(TR::InstOpCode::JA4, node, oolFailLabel, cg);
-
-   // no heap overflow, advance heap alloc to end of allocation
-   generateMemRegInstruction(TR::InstOpCode::SMemReg(), node, generateX86MemoryReference(vmThreadReg, offsetof(J9VMThread, heapAlloc), cg), allocEndReg, cg);
-
-   // zero out allocation
-   if (!skipZeroInit)
-      {
-      generateRegRegInstruction(TR::InstOpCode::XOR4RegReg, node, zeroReg, zeroReg, cg);
-      // nDimsRegister doesn't need to hold its value after oolFailLabel
-      generateRegRegInstruction(TR::InstOpCode::MOV8RegReg, node, nDimsRegister, leafArrReg, cg);
-      // REPSTOSB fills rcx bytes at [rdi] with al
-      // rcx = allocEndReg - leafArrReg
-      // rdi = leafArrReg
-      // eax = zeroReg
-      generateRegRegInstruction(TR::InstOpCode::SUB8RegReg, node, allocEndReg, leafArrReg, cg);
-      generateInstruction(TR::InstOpCode::REPSTOSB, node, cg);
-      cg->stopUsingRegister(zeroReg);
-      }
-   cg->stopUsingRegister(nDimsRegister);
-
-   // initialise spine array header
-   generateMemRegInstruction(TR::InstOpCode::SMemReg(use64BitClasses), node, generateX86MemoryReference(spineArrReg, classOffset, cg), classReg, cg);
-   generateMemRegInstruction(TR::InstOpCode::S4MemReg, node, generateX86MemoryReference(spineArrReg, sizeOffset, cg), firstDimLenReg, cg);
-
-   // load class of leaf array
-   generateRegMemInstruction(TR::InstOpCode::LRegMem(use64BitClasses), node, classReg,
-            generateX86MemoryReference(classReg, offsetof(J9ArrayClass, componentType), cg), cg);
-
-   // if the class and size fields fit in a contiguous 8 bytes, we can set them in a single store
-   bool arrayHeaderFitsInGPR = !use64BitClasses && ((sizeOffset - classOffset) == 4);
-   if (arrayHeaderFitsInGPR)
-      {
-      generateRegImmInstruction(TR::InstOpCode::SHL8RegImm1, node, secondDimLenReg, 32, cg);
-      generateRegRegInstruction(TR::InstOpCode::OR8RegReg, node, classReg, secondDimLenReg, cg);
-      }
-
-   // set up loop to initialise spine array elements and leaf array headers
-   TR::LabelSymbol *loopTop = generateLabelSymbol(cg);
-   TR::LabelSymbol *loopBottom = generateLabelSymbol(cg);
-   generateLabelInstruction(TR::InstOpCode::label, node, loopTop, cg);
-
-   generateRegRegInstruction(TR::InstOpCode::TEST8RegReg, node, firstDimLenReg, firstDimLenReg, cg);
-   generateLabelInstruction(TR::InstOpCode::JE4, node, loopBottom, cg);
-
-   generateRegInstruction(TR::InstOpCode::DECReg(), node, firstDimLenReg, cg);
-
-   // populate leaf array header
-   if (arrayHeaderFitsInGPR)
-      {
-      generateMemRegInstruction(TR::InstOpCode::S8MemReg, node, generateX86MemoryReference(leafArrReg, classOffset, cg), classReg, cg);
-      }
-   else
-      {
-      generateMemRegInstruction(TR::InstOpCode::SMemReg(use64BitClasses), node, generateX86MemoryReference(leafArrReg, classOffset, cg), classReg, cg);
-      generateMemRegInstruction(TR::InstOpCode::S4MemReg, node, generateX86MemoryReference(leafArrReg, sizeOffset, cg), secondDimLenReg, cg);
-      }
-
-   // populate spine array slot
-   TR::MemoryReference *spineSlotMemRef = generateX86MemoryReference(spineArrReg, firstDimLenReg, spineArraySlotShift, contiguousArrayHeaderSize, cg);
-   if (comp->useCompressedPointers())
-      {
-      int32_t shiftAmount = TR::Compiler->om.compressedReferenceShift();
-      TR::Register *tempReg = spineSizeReg; // we no longer need to know the size of the spine
-      generateRegRegInstruction(TR::InstOpCode::MOVRegReg(), node, tempReg, leafArrReg, cg);
-      if (shiftAmount != 0)
-         {
-         generateRegImmInstruction(TR::InstOpCode::SHRRegImm1(), node, tempReg, shiftAmount, cg);
-         }
-      generateMemRegInstruction(TR::InstOpCode::S4MemReg, node, spineSlotMemRef, tempReg, cg);
-      }
-   else
-      {
-      generateMemRegInstruction(TR::InstOpCode::S8MemReg, node, spineSlotMemRef, leafArrReg, cg);
-      }
-
-   // increment leafArrReg and loop back
-   generateRegRegInstruction(TR::InstOpCode::ADD8RegReg, node, leafArrReg, leafSizeReg, cg);
-   generateLabelInstruction(TR::InstOpCode::JMP4, node, loopTop, cg);
-
-   generateLabelInstruction(TR::InstOpCode::label, node, loopBottom, cg);
-
-   TR::RegisterDependencyConditions *deps = generateRegisterDependencyConditions(0, skipZeroInit ? 11 : 12, cg);
-
-   deps->addPostCondition(dimsPtrReg, TR::RealRegister::NoReg, cg);
-   deps->addPostCondition(firstDimLenReg, TR::RealRegister::NoReg, cg);
-   deps->addPostCondition(secondDimLenReg, TR::RealRegister::NoReg, cg);
-   deps->addPostCondition(classReg, TR::RealRegister::NoReg, cg);
-   deps->addPostCondition(spineSizeReg, TR::RealRegister::NoReg, cg);
-   deps->addPostCondition(leafSizeReg, TR::RealRegister::NoReg, cg);
-   deps->addPostCondition(leafArrReg, TR::RealRegister::NoReg, cg);
-
-   if (skipZeroInit)
-      {
-      deps->addPostCondition(spineArrReg, TR::RealRegister::eax, cg);
-      deps->addPostCondition(allocEndReg, TR::RealRegister::NoReg, cg);
-      deps->addPostCondition(nDimsRegister, TR::RealRegister::NoReg, cg);
-      }
-   else
-      {
-      deps->addPostCondition(zeroReg, TR::RealRegister::eax, cg);
-      deps->addPostCondition(spineArrReg, TR::RealRegister::NoReg, cg);
-      deps->addPostCondition(allocEndReg, TR::RealRegister::ecx, cg);
-      deps->addPostCondition(nDimsRegister, TR::RealRegister::edi, cg);
-      }
-
-   deps->addPostCondition(vmThreadReg, TR::RealRegister::ebp, cg);
-
-   TR::Node *callNode = outlinedHelperCall->getCallNode();
-   TR::Register *reg;
-
-   if (callNode->getFirstChild() == node->getFirstChild())
-      {
-      reg = callNode->getFirstChild()->getRegister();
-      if (reg)
-         deps->unionPostCondition(reg, TR::RealRegister::NoReg, cg);
-      }
-
-   if (callNode->getSecondChild() == node->getSecondChild())
-      {
-      reg = callNode->getSecondChild()->getRegister();
-      if (reg)
-         deps->unionPostCondition(reg, TR::RealRegister::NoReg, cg);
-      }
-
-   if (callNode->getThirdChild() == node->getThirdChild())
-      {
-      reg = callNode->getThirdChild()->getRegister();
-      if (reg)
-         deps->unionPostCondition(reg, TR::RealRegister::NoReg, cg);
-      }
-
-   deps->stopAddingConditions();
-
-   generateLabelInstruction(TR::InstOpCode::label, node, doneLabel, deps, cg);
-   doneLabel->setEndInternalControlFlow();
-
-   // Copy the newly allocated object into a collected reference register now that it is a valid object.
-   TR::Register *targetReg = cg->allocateCollectedReferenceRegister();
-   TR::RegisterDependencyConditions  *deps2 = generateRegisterDependencyConditions(0, 1, cg);
-   deps2->addPostCondition(targetReg, TR::RealRegister::eax, cg);
-   generateRegRegInstruction(TR::InstOpCode::MOVRegReg(), node, targetReg, spineArrReg, deps2, cg);
-   cg->stopUsingRegister(spineArrReg);
-
-   cg->stopUsingRegister(dimsPtrReg);
-   cg->stopUsingRegister(firstDimLenReg);
-   cg->stopUsingRegister(secondDimLenReg);
-   cg->stopUsingRegister(classReg);
-   cg->stopUsingRegister(spineSizeReg);
-   cg->stopUsingRegister(leafSizeReg);
-   cg->stopUsingRegister(leafArrReg);
-   cg->stopUsingRegister(allocEndReg);
-
-   cg->decReferenceCount(sizeArrNode);
-   cg->decReferenceCount(classNode);
-   cg->recursivelyDecReferenceCount(nDimsNode);
-
-   node->setRegister(targetReg);
-   return targetReg;
+   #undef iComment
    }
 
 /**
@@ -2073,7 +2038,10 @@ TR::Register *J9::X86::TreeEvaluator::multianewArrayEvaluator(TR::Node *node, TR
 #if defined(J9VM_GC_SPARSE_HEAP_ALLOCATION)
       isOffHeapAllocationEnabled = TR::Compiler->om.isOffHeapAllocationEnabled();
 #endif /* defined(J9VM_GC_SPARSE_HEAP_ALLOCATION) */
-      if (!disable && !isOffHeapAllocationEnabled && (leafArrayElementSize != -1) && !comp->getOptions()->realTimeGC())
+      if (!disable
+            && !isOffHeapAllocationEnabled
+            && (leafArrayElementSize > 0)
+            && !comp->suppressAllocationInlining())
          {
          return generate2DArrayWithInlineAllocators(node, cg, leafArrayElementSize);
          }
