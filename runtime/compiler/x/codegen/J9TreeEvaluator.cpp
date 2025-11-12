@@ -1595,9 +1595,10 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    // zero out allocation
    if (!skipZeroInit)
       {
-      generateRegRegInstruction(TR::InstOpCode::XOR4RegReg, node, zeroReg, zeroReg, cg);
+      generateRegRegInstruction(TR::InstOpCode::XOR1RegReg, node, zeroReg, zeroReg, cg);
       // nDimsRegister doesn't need to hold its value after oolFailLabel
       generateRegRegInstruction(TR::InstOpCode::MOV8RegReg, node, nDimsRegister, leafArrReg, cg);
+      // THIS IS PROBLEMATIC, FIX ME!!
       // REPSTOSB fills rcx bytes at [rdi] with al
       // rcx = allocEndReg - leafArrReg
       // rdi = leafArrReg
