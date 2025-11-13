@@ -1747,7 +1747,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
 
    node->setRegister(targetReg);
 
-   TR_Debug *debug = cg()->getDebug();
+   TR_Debug *debug = cg->getDebug();
    if (debug) {
       debug->nameRegister(spineArrReg, "multianewarray.spineArr");
       debug->nameRegister(dimsPtrReg, "multianewarray.dimsPtr");
