@@ -1652,6 +1652,9 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
       {
       int32_t shiftAmount = TR::Compiler->om.compressedReferenceShift();
       TR::Register *tempReg = spineSizeReg; // we no longer need to know the size of the spine
+      if (cg->getDebug())
+         cg->getDebug()->nameRegister(tempReg, "multianewarray.temp");
+
       generateRegRegInstruction(TR::InstOpCode::MOVRegReg(), node, tempReg, leafArrReg, cg);
       if (shiftAmount != 0)
          {
