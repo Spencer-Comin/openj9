@@ -1746,6 +1746,25 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    cg->recursivelyDecReferenceCount(nDimsNode);
 
    node->setRegister(targetReg);
+
+   TR_Debug *debug = cg()->getDebug();
+   if (debug) {
+      debug->nameRegister(spineArrReg, "multianewarray.spineArr");
+      debug->nameRegister(dimsPtrReg, "multianewarray.dimsPtr");
+      debug->nameRegister(firstDimLenReg, "multianewarray.firstDimLen");
+      debug->nameRegister(secondDimLenReg, "multianewarray.secondDimLen");
+      debug->nameRegister(classReg, "multianewarray.class");
+      debug->nameRegister(spineSizeReg, "multianewarray.spineSize");
+      debug->nameRegister(leafSizeReg, "multianewarray.leafSize");
+      debug->nameRegister(leafArrReg, "multianewarray.leafArr");
+      debug->nameRegister(allocEndReg, "multianewarray.allocEnd");
+      debug->nameRegister(targetReg, "multianewarray.target");
+      debug->nameRegister(nDimsRegister, "multianewarray.nDims");
+
+      if (zeroReg)
+         debug->nameRegister(zeroReg, "multianewarray.zeroReg");
+   }
+
    return targetReg;
    }
 
