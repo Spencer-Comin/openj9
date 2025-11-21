@@ -1657,7 +1657,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    generateLabelInstruction(TR::InstOpCode::JE4, node, doneLabel, cg);
 
    // load element class
-   generateRegMemInstruction(TR::InstOpCode::LRegMem(use64BitClasses), node, tempReg,
+   generateRegMemInstruction(TR::InstOpCode::L8RegMem, node, tempReg,
             generateX86MemoryReference(classReg, offsetof(J9ArrayClass, componentType), cg), cg);
 
    // adjust leafPtr to prepare for loop
