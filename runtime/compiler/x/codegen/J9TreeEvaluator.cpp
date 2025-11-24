@@ -1550,6 +1550,13 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    // spineSizeReg += first dim * reference size
    generateRegMemInstruction(TR::InstOpCode::LEA8RegMem, node, spineSizeReg, generateX86MemoryReference(spineSizeReg, firstDimReg, trailingZeroes(referenceSize), 0, cg), cg);
 
+   // pad spineSizeReg so leaf arrays will be aligned
+   if (needsAlignLeaf)
+      {
+      generateRegImmInstruction(TR::InstOpCode::ADD4RegImm4, node, spineSizeReg, alignmentInBytes-1, cg);
+      generateRegImmInstruction(TR::InstOpCode::AND4RegImm4, node, spineSizeReg, -alignmentInBytes, cg);
+      }
+
    TR::Register *leafSizeReg = cg->allocateRegister();
    generateRegRegInstruction(TR::InstOpCode::XOR8RegReg, node, leafSizeReg, leafSizeReg, cg);
 
