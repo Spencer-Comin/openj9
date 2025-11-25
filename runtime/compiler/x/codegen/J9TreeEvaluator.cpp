@@ -1706,7 +1706,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    generateRegInstruction(TR::InstOpCode::DEC8Reg, node, firstDimReg, cg);
    generateLabelInstruction(TR::InstOpCode::JG4, node, zeroArrayOOLLoopLabel, cg);
 
-   generateLabelInstruction(TR::InstOpCode::J4, node, doneLabel, cg);
+   generateLabelInstruction(TR::InstOpCode::JMP4, node, doneLabel, cg);
    zeroArrayOOL->setOutlinedPathRegisterUsageList(cg->stopRecordingRegisterUsage());
    zeroArrayOOL->swapInstructionListsWithCompilation();
 
