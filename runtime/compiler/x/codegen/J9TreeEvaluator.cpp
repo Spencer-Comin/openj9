@@ -1702,7 +1702,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
       generateMemRegInstruction(TR::InstOpCode::S8MemReg, node, spineSlotMemRef, leafPtrReg, cg);
       }
 
-   generateRegRegInstruction(TR::InstOpCode::SUB8RegImm4, node, leafPtrReg, zeroArraySizeAligned, cg);
+   generateRegImmInstruction(TR::InstOpCode::SUB8RegImm4, node, leafPtrReg, zeroArraySizeAligned, cg);
    generateRegInstruction(TR::InstOpCode::DEC8Reg, node, firstDimReg, cg);
    generateLabelInstruction(TR::InstOpCode::JG4, node, zeroArrayOOLLoopLabel, cg);
 
