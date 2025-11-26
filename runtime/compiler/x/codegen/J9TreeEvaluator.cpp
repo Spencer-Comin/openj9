@@ -1674,45 +1674,6 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    // adjust leafPtr to prepare for loop
    generateRegRegInstruction(TR::InstOpCode::SUB8RegReg, node, leafPtrReg, leafSizeReg, cg);
 
-   // if second dim = 0, use OOL loop to allocate zero sized arrays
-   TR::LabelSymbol *zeroArrayOOLLoopLabel = generateLabelSymbol(cg);
-   generateRegImmInstruction(TR::InstOpCode::CMP8RegImm4, node, secondDimReg, 0, cg);
-   generateLabelInstruction(TR::InstOpCode::JE4, node, zeroArrayOOLLoopLabel, cg);
-
-   TR_OutlinedInstructions *zeroArrayOOL = new (cg->trHeapMemory()) TR_OutlinedInstructions(zeroArrayOOLLoopLabel, cg);
-   cg->getOutlinedInstructionsList().push_front(zeroArrayOOL);
-
-   zeroArrayOOL->swapInstructionListsWithCompilation();
-   cg->startRecordingRegisterUsage();
-   generateLabelInstruction(TR::InstOpCode::label, node, zeroArrayOOLLoopLabel, cg);
-
-   generateMemRegInstruction(TR::InstOpCode::SMemReg(use64BitClasses), node, generateX86MemoryReference(leafPtrReg, classOffset, cg), tempReg, cg);
-
-   TR::MemoryReference *spineSlotMemRef = generateX86MemoryReference(spinePtrReg, firstDimReg, trailingZeroes(referenceSize), contiguousArrayHeaderSize - referenceSize, cg);
-   if (comp->useCompressedPointers())
-      {
-      int32_t shiftAmount = TR::Compiler->om.compressedReferenceShift();
-      generateRegRegInstruction(TR::InstOpCode::MOVRegReg(), node, spineSizeReg, leafPtrReg, cg);
-      if (shiftAmount != 0)
-         {
-         generateRegImmInstruction(TR::InstOpCode::SHRRegImm1(), node, spineSizeReg, shiftAmount, cg);
-         }
-      generateMemRegInstruction(TR::InstOpCode::S4MemReg, node, spineSlotMemRef, spineSizeReg, cg);
-      }
-   else
-      {
-      generateMemRegInstruction(TR::InstOpCode::S8MemReg, node, spineSlotMemRef, leafPtrReg, cg);
-      }
-
-   generateRegImmInstruction(TR::InstOpCode::SUB8RegImm4, node, leafPtrReg, zeroArraySizeAligned, cg);
-   generateRegInstruction(TR::InstOpCode::DEC8Reg, node, firstDimReg, cg);
-   generateLabelInstruction(TR::InstOpCode::JG4, node, zeroArrayOOLLoopLabel, cg);
-
-   generateLabelInstruction(TR::InstOpCode::JMP4, node, doneLabel, cg);
-   zeroArrayOOL->setOutlinedPathRegisterUsageList(cg->stopRecordingRegisterUsage());
-   zeroArrayOOL->swapInstructionListsWithCompilation();
-
-
    // begin loop
    TR::LabelSymbol *loopLabel = generateLabelSymbol(cg);
    generateLabelInstruction(TR::InstOpCode::label, node, loopLabel, cg);
@@ -1725,6 +1686,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    // insert leaf array reference into spine array
    // spinePtr[first dim * reference size + (header bytes - reference size)] = leafPtr
    // - reference size to account for the off by one value of first dim
+   TR::MemoryReference *spineSlotMemRef = generateX86MemoryReference(spinePtrReg, firstDimReg, trailingZeroes(referenceSize), contiguousArrayHeaderSize - referenceSize, cg);
    if (comp->useCompressedPointers())
       {
       int32_t shiftAmount = TR::Compiler->om.compressedReferenceShift();
