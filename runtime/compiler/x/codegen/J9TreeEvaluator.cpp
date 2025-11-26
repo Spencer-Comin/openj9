@@ -1517,12 +1517,12 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    TR::Register *dimsPtrReg = cg->evaluate(dimsPtrNode);
    TR::Register *classReg = cg->evaluate(classNode);
 
+   TR::Register *spineSizeReg = cg->allocateRegister();
+   generateRegImmInstruction(TR::InstOpCode::MOV8RegImm4, node, spineSizeReg, contiguousArrayHeaderSize, cg);
+
    int32_t zeroArraySizeAligned = OMR::align(TR::Compiler->om.discontiguousArrayHeaderSizeInBytes(), TR::Compiler->om.getObjectAlignmentInBytes());
    TR::Register *tempReg = cg->allocateRegister();
    generateRegImmInstruction(TR::InstOpCode::MOV8RegImm4, node, tempReg, zeroArraySizeAligned, cg);
-
-   TR::Register *spineSizeReg = cg->allocateRegister();
-   generateRegImmInstruction(TR::InstOpCode::MOV8RegImm4, node, spineSizeReg, contiguousArrayHeaderSize, cg);
 
    TR::Register *firstDimReg = cg->allocateRegister();
    generateRegMemInstruction(TR::InstOpCode::MOVSXReg8Mem4, node, firstDimReg, generateX86MemoryReference(dimsPtrReg, 4, cg), cg);
@@ -1566,7 +1566,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    generateRegMemInstruction(TR::InstOpCode::MOVSXReg8Mem4, node, secondDimReg, generateX86MemoryReference(dimsPtrReg, 0, cg), cg);
 
    // leaf size = second dim == 0 ? aligned discontiguous header size : contiguous header size + second dim * leaf element size + padding
-   generateRegImmInstruction(TR::InstOpCode::MOV8RegImm4, node, tempReg, contiguousArrayHeaderSize, cg);
+   generateRegImmInstruction(TR::InstOpCode::MOV8RegImm4, node, leafSizeReg, contiguousArrayHeaderSize, cg);
    generateRegImmInstruction(TR::InstOpCode::MOV8RegImm4, node, tempReg, zeroArraySizeAligned, cg);
    generateRegImmInstruction(TR::InstOpCode::CMP8RegImm4, node, secondDimReg, 0, cg);
    generateRegRegInstruction(TR::InstOpCode::CMOVE8RegReg, node, leafSizeReg, tempReg, cg);
