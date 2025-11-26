@@ -1517,8 +1517,9 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    TR::Register *dimsPtrReg = cg->evaluate(dimsPtrNode);
    TR::Register *classReg = cg->evaluate(classNode);
 
+   int32_t zeroArraySizeAligned = OMR::align(TR::Compiler->om.discontiguousArrayHeaderSizeInBytes(), TR::Compiler->om.getObjectAlignmentInBytes());
    TR::Register *tempReg = cg->allocateRegister();
-   generateRegRegInstruction(TR::InstOpCode::XOR8RegReg, node, tempReg, tempReg, cg);
+   generateRegImmInstruction(TR::InstOpCode::MOV8RegImm4, node, tempReg, zeroArraySizeAligned, cg);
 
    TR::Register *spineSizeReg = cg->allocateRegister();
    generateRegImmInstruction(TR::InstOpCode::MOV8RegImm4, node, spineSizeReg, contiguousArrayHeaderSize, cg);
@@ -1528,6 +1529,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
 
    // if first dim = 0 skip over loading the first dimension and calculating the leaf size
    generateRegImmInstruction(TR::InstOpCode::CMP8RegImm4, node, firstDimReg, 0, cg);
+   generateRegRegInstruction(TR::InstOpCode::CMOVE8RegReg, node, spineSizeReg, tempReg, cg);
 
    TR::LabelSymbol *startControlFlow = generateLabelSymbol(cg);
    startControlFlow->setStartInternalControlFlow();
@@ -1563,8 +1565,11 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    TR::Register *secondDimReg = cg->allocateRegister();
    generateRegMemInstruction(TR::InstOpCode::MOVSXReg8Mem4, node, secondDimReg, generateX86MemoryReference(dimsPtrReg, 0, cg), cg);
 
-   // if second dim = 0 skip calculating leaf size
+   // leaf size = second dim == 0 ? aligned discontiguous header size : contiguous header size + second dim * leaf element size + padding
+   generateRegImmInstruction(TR::InstOpCode::MOV8RegImm4, node, tempReg, contiguousArrayHeaderSize, cg);
+   generateRegImmInstruction(TR::InstOpCode::MOV8RegImm4, node, tempReg, zeroArraySizeAligned, cg);
    generateRegImmInstruction(TR::InstOpCode::CMP8RegImm4, node, secondDimReg, 0, cg);
+   generateRegRegInstruction(TR::InstOpCode::CMOVE8RegReg, node, leafSizeReg, tempReg, cg);
 
    TR::LabelSymbol *calculateLeafBlockSize = generateLabelSymbol(cg);
    generateLabelInstruction(TR::InstOpCode::JE4, node, calculateLeafBlockSize, cg);
@@ -1584,7 +1589,6 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
 
    generateLabelInstruction(TR::InstOpCode::label, node, calculateLeafBlockSize, cg);
 
-   generateRegImmInstruction(TR::InstOpCode::ADD8RegImm4, node, leafSizeReg, contiguousArrayHeaderSize, cg);
    generateRegRegInstruction(TR::InstOpCode::MOV8RegReg, node, tempReg, firstDimReg, cg);
    generateRegRegInstruction(TR::InstOpCode::IMUL8RegReg, node, tempReg, leafSizeReg, cg);
 
@@ -1683,8 +1687,6 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    generateLabelInstruction(TR::InstOpCode::label, node, zeroArrayOOLLoopLabel, cg);
 
    generateMemRegInstruction(TR::InstOpCode::SMemReg(use64BitClasses), node, generateX86MemoryReference(leafPtrReg, classOffset, cg), tempReg, cg);
-
-   int32_t zeroArraySizeAligned = OMR::align(TR::Compiler->om.discontiguousArrayHeaderSizeInBytes(), TR::Compiler->om.getObjectAlignmentInBytes());
 
    TR::MemoryReference *spineSlotMemRef = generateX86MemoryReference(spinePtrReg, firstDimReg, trailingZeroes(referenceSize), contiguousArrayHeaderSize - referenceSize, cg);
    if (comp->useCompressedPointers())
