@@ -1547,6 +1547,10 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    doneLabel->setEndInternalControlFlow();
    TR::Register *spinePtrReg = cg->allocateRegister();
    TR_OutlinedInstructions *outlinedHelperCall = new (cg->trHeapMemory()) TR_OutlinedInstructions(node, TR::acall, spinePtrReg, helperLabel, doneLabel, cg);
+   cg->generateDebugCounter(
+         outlinedHelperCall->getFirstInstruction(),
+         TR::DebugCounter::debugCounterName(comp, "helperCalls/%s/(%s)/%d/%d", node->getOpCode().getName(), comp->signature(), node->getByteCodeInfo().getCallerIndex(), node->getByteCodeInfo().getByteCodeIndex()),
+         1, TR::DebugCounter::Cheap);
    cg->getOutlinedInstructionsList().push_front(outlinedHelperCall);
 
    // spineSizeReg += first dim * reference size
