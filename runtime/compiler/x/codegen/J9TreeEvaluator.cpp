@@ -1442,6 +1442,13 @@ TR::Register *J9::X86::TreeEvaluator::newEvaluator(TR::Node *node, TR::CodeGener
    return targetRegister;
    }
 
+/**
+ * Generate code for multianewarray
+ *
+ * Includes inline allocation for arrays.
+ *
+ * NB Must only be used for arrays of at least two dimensions
+*/
 static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::CodeGenerator *cg,  int32_t leafArrayElementSize)
    {
    TR::Compilation *comp = cg->comp();
@@ -1464,7 +1471,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
     *    | padding for alignment   |  |
     *    |-------------------------|  |
     *                ...              |
-    *    |-------------------------|  | m * (header bytes + n * X bytes + leaf padding bytes) - leaf padding bytes
+    *    |-------------------------|  | m * (header bytes + n * X bytes + leaf padding bytes)
     *    | n empty X array slots   |  |
     *    |-------------------------|  |
     *    | 2nd leaf array header   |  |
@@ -1723,6 +1730,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    deps->addPostCondition(firstDimReg, TR::RealRegister::NoReg, cg);
    deps->addPostCondition(leafSizeReg, TR::RealRegister::NoReg, cg);
    deps->addPostCondition(secondDimReg, TR::RealRegister::NoReg, cg);
+   deps->addPostCondition(vmThreadReg, TR::RealRegister::ebp, cg);
 
    TR::Node *callNode = outlinedHelperCall->getCallNode();
    TR::Register *reg;
