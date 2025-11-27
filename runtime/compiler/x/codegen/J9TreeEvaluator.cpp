@@ -1730,7 +1730,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    deps->addPostCondition(firstDimReg, TR::RealRegister::NoReg, cg);
    deps->addPostCondition(leafSizeReg, TR::RealRegister::NoReg, cg);
    deps->addPostCondition(secondDimReg, TR::RealRegister::NoReg, cg);
-   deps->addPostCondition(vmThreadReg, TR::RealRegister::ebp, cg);
+   deps->addPostCondition(cg->getVMThreadRegister(), TR::RealRegister::ebp, cg);
 
    TR::Node *callNode = outlinedHelperCall->getCallNode();
    TR::Register *reg;
