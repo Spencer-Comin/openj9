@@ -1660,7 +1660,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    if (sizeShift != 0)
       generateRegImmInstruction(TR::InstOpCode::SHRRegImm1(), node, spineSizeReg, sizeShift, cg);
 
-   TR::RegisterDependencyConditions *repstosDeps = generateRegisterDependencyConditions(0, 3, cg);
+   TR::RegisterDependencyConditions *repstosDeps = generateRegisterDependencyConditions(0, 4, cg);
    repstosDeps->addPostCondition(tempReg, TR::RealRegister::eax, cg);
    repstosDeps->addPostCondition(spineSizeReg, TR::RealRegister::ecx, cg);
    repstosDeps->addPostCondition(leafPtrReg, TR::RealRegister::edi, cg);
@@ -1718,7 +1718,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    generateLabelInstruction(TR::InstOpCode::JG4, node, loopLabel, cg);
 
    // done, OOL helper will return to this point
-   TR::RegisterDependencyConditions *deps = generateRegisterDependencyConditions(0, 9, cg);
+   TR::RegisterDependencyConditions *deps = generateRegisterDependencyConditions(0, 10, cg);
    deps->addPostCondition(tempReg, TR::RealRegister::NoReg, cg);
    deps->addPostCondition(spineSizeReg, TR::RealRegister::NoReg, cg);
    deps->addPostCondition(leafPtrReg, TR::RealRegister::NoReg, cg);
