@@ -1717,7 +1717,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    generateLabelInstruction(TR::InstOpCode::JG4, node, loopLabel, cg);
 
    // done, OOL helper will return to this point
-   TR::RegisterDependencyConditions *deps = generateRegisterDependencyConditions(0, 10, cg);
+   TR::RegisterDependencyConditions *deps = generateRegisterDependencyConditions(0, 13, cg);
    deps->addPostCondition(tempReg, TR::RealRegister::NoReg, cg);
    deps->addPostCondition(spineSizeReg, TR::RealRegister::NoReg, cg);
    deps->addPostCondition(leafPtrReg, TR::RealRegister::NoReg, cg);
