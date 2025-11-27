@@ -1519,6 +1519,19 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    if (breakOnInlineGenerate2DArray)
       generateInstruction(TR::InstOpCode::INT3, node, cg);
 
+   // Generate OOL snippet to call vm helper for error cases
+   // Snippet will return to doneLabel with result in spinePtrReg
+   TR::LabelSymbol *helperLabel = generateLabelSymbol(cg);
+   TR::LabelSymbol *doneLabel = generateLabelSymbol(cg);
+   doneLabel->setEndInternalControlFlow();
+   TR::Register *spinePtrReg = cg->allocateRegister();
+   TR_OutlinedInstructions *outlinedHelperCall = new (cg->trHeapMemory()) TR_OutlinedInstructions(node, TR::acall, spinePtrReg, helperLabel, doneLabel, cg);
+   cg->generateDebugCounter(
+         outlinedHelperCall->getFirstInstruction(),
+         TR::DebugCounter::debugCounterName(comp, "helperCalls/%s/(%s)/%d/%d", node->getOpCode().getName(), comp->signature(), node->getByteCodeInfo().getCallerIndex(), node->getByteCodeInfo().getByteCodeIndex()),
+         1, TR::DebugCounter::Cheap);
+   cg->getOutlinedInstructionsList().push_front(outlinedHelperCall);
+
    // load dimensions and class
    TR::Register *nDimsReg = cg->evaluate(nDimsNode);
    TR::Register *dimsPtrReg = cg->evaluate(dimsPtrNode);
@@ -1546,19 +1559,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    generateLabelInstruction(TR::InstOpCode::JE4, node, allocateLabel, cg);
 
    // if first dim < 0 go to OOL helper
-   TR::LabelSymbol *helperLabel = generateLabelSymbol(cg);
    generateLabelInstruction(TR::InstOpCode::JL4, node, helperLabel, cg);
-
-   // OOL helper will return to doneLabel with result in spinePtrReg
-   TR::LabelSymbol *doneLabel = generateLabelSymbol(cg);
-   doneLabel->setEndInternalControlFlow();
-   TR::Register *spinePtrReg = cg->allocateRegister();
-   TR_OutlinedInstructions *outlinedHelperCall = new (cg->trHeapMemory()) TR_OutlinedInstructions(node, TR::acall, spinePtrReg, helperLabel, doneLabel, cg);
-   cg->generateDebugCounter(
-         outlinedHelperCall->getFirstInstruction(),
-         TR::DebugCounter::debugCounterName(comp, "helperCalls/%s/(%s)/%d/%d", node->getOpCode().getName(), comp->signature(), node->getByteCodeInfo().getCallerIndex(), node->getByteCodeInfo().getByteCodeIndex()),
-         1, TR::DebugCounter::Cheap);
-   cg->getOutlinedInstructionsList().push_front(outlinedHelperCall);
 
    // spineSizeReg += first dim * reference size
    generateRegMemInstruction(TR::InstOpCode::LEA8RegMem, node, spineSizeReg, generateX86MemoryReference(spineSizeReg, firstDimReg, trailingZeroes(referenceSize), 0, cg), cg);
