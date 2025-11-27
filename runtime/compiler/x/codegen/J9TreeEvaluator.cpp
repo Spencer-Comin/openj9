@@ -1719,7 +1719,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    // done, OOL helper will return to this point
    TR::RegisterDependencyConditions *deps = generateRegisterDependencyConditions(0, 13, cg);
    deps->addPostCondition(tempReg, TR::RealRegister::NoReg, cg);
-   deps->addPostCondition(spineSizeReg, TR::RealRegister::NoReg, cg);
+   deps->addPostCondition(spinePtrReg, TR::RealRegister::NoReg, cg);
    deps->addPostCondition(leafPtrReg, TR::RealRegister::NoReg, cg);
 
    deps->addPostCondition(nDimsReg, TR::RealRegister::NoReg, cg);
