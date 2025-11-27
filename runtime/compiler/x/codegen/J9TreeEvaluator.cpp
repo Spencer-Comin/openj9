@@ -1664,6 +1664,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    repstosDeps->addPostCondition(tempReg, TR::RealRegister::eax, cg);
    repstosDeps->addPostCondition(spineSizeReg, TR::RealRegister::ecx, cg);
    repstosDeps->addPostCondition(leafPtrReg, TR::RealRegister::edi, cg);
+   repstosDeps->addPostCondition(vmThreadReg, TR::RealRegister::ebp, cg);
    generateInstruction(repstosOpCode, node, repstosDeps, cg);
    // spineSizeReg is 0 after this point
    // leafPtrReg is now pointing to the end of the allocation
@@ -1730,7 +1731,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    deps->addPostCondition(firstDimReg, TR::RealRegister::NoReg, cg);
    deps->addPostCondition(leafSizeReg, TR::RealRegister::NoReg, cg);
    deps->addPostCondition(secondDimReg, TR::RealRegister::NoReg, cg);
-   deps->addPostCondition(cg->getVMThreadRegister(), TR::RealRegister::ebp, cg);
+   deps->addPostCondition(vmThreadReg, TR::RealRegister::ebp, cg);
 
    TR::Node *callNode = outlinedHelperCall->getCallNode();
    TR::Register *reg;
