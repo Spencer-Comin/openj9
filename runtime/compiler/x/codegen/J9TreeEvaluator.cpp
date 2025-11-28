@@ -1720,7 +1720,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    // done, OOL helper will return to this point
    TR::RegisterDependencyConditions *deps = generateRegisterDependencyConditions(0, 13, cg);
    deps->addPostCondition(tempReg, TR::RealRegister::NoReg, cg);
-   deps->addPostCondition(spinePtrReg, TR::RealRegister::eax, cg);
+   deps->addPostCondition(spinePtrReg, TR::RealRegister::NoReg, cg);
    deps->addPostCondition(leafPtrReg, TR::RealRegister::NoReg, cg);
 
    deps->addPostCondition(nDimsReg, TR::RealRegister::NoReg, cg);
@@ -1769,10 +1769,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
 
    // now that the array is properly allocated, move into a collected reference register
    TR::Register *returnReg = cg->allocateCollectedReferenceRegister();
-   TR::RegisterDependencyConditions  *deps2 = generateRegisterDependencyConditions(0, 1, cg);
-   deps2->addPostCondition(returnReg, TR::RealRegister::eax, cg);
-   generateRegRegInstruction(TR::InstOpCode::MOV8RegReg, node, returnReg, spinePtrReg, deps2, cg);
-   cg->stopUsingRegister(spinePtrReg);
+   generateRegRegInstruction(TR::InstOpCode::MOV8RegReg, node, returnReg, spinePtrReg, cg);
 
    TR_Debug *debug = cg->getDebug();
    if (debug)
