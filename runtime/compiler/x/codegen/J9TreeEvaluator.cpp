@@ -1727,10 +1727,11 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    generateRegRegInstruction(TR::InstOpCode::MOV8RegReg, node, outlinedResultReg, spinePtrReg, cg);
 
    // done, OOL helper will return to this point with result already in outlinedResultReg
+   // Force outlinedResultReg to rax so both paths converge with result in same physical register
    TR::RegisterDependencyConditions *deps = generateRegisterDependencyConditions(0, 14, cg);
    deps->addPostCondition(tempReg, TR::RealRegister::NoReg, cg);
    deps->addPostCondition(spinePtrReg, TR::RealRegister::NoReg, cg);
-   deps->addPostCondition(outlinedResultReg, TR::RealRegister::NoReg, cg);
+   deps->addPostCondition(outlinedResultReg, TR::RealRegister::eax, cg);
    deps->addPostCondition(leafPtrReg, TR::RealRegister::NoReg, cg);
 
    deps->addPostCondition(nDimsReg, TR::RealRegister::NoReg, cg);
