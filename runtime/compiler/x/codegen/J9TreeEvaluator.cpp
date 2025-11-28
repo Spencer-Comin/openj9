@@ -1520,12 +1520,18 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
       generateInstruction(TR::InstOpCode::INT3, node, cg);
 
    // Generate OOL snippet to call vm helper for error cases
-   // Snippet will return to doneLabel with result in spinePtrReg
+   // Snippet will return to doneLabel with result in a register
    TR::LabelSymbol *helperLabel = generateLabelSymbol(cg);
    TR::LabelSymbol *doneLabel = generateLabelSymbol(cg);
    doneLabel->setEndInternalControlFlow();
+
+   // Allocate a register for inline allocation work
    TR::Register *spinePtrReg = cg->allocateRegister();
-   TR_OutlinedInstructions *outlinedHelperCall = new (cg->trHeapMemory()) TR_OutlinedInstructions(node, TR::acall, spinePtrReg, helperLabel, doneLabel, cg);
+
+   // For the outlined helper, we need the result in a collected reference register
+   // so it matches what we'll use after the merge point
+   TR::Register *outlinedResultReg = cg->allocateCollectedReferenceRegister();
+   TR_OutlinedInstructions *outlinedHelperCall = new (cg->trHeapMemory()) TR_OutlinedInstructions(node, TR::acall, outlinedResultReg, helperLabel, doneLabel, cg);
    cg->generateDebugCounter(
          outlinedHelperCall->getFirstInstruction(),
          TR::DebugCounter::debugCounterName(comp, "helperCalls/%s/(%s)/%d/%d", node->getOpCode().getName(), comp->signature(), node->getByteCodeInfo().getCallerIndex(), node->getByteCodeInfo().getByteCodeIndex()),
@@ -1717,10 +1723,12 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    generateRegInstruction(TR::InstOpCode::DEC8Reg, node, firstDimReg, cg);
    generateLabelInstruction(TR::InstOpCode::JG4, node, loopLabel, cg);
 
-   // done, OOL helper will return to this point
-   TR::RegisterDependencyConditions *deps = generateRegisterDependencyConditions(0, 13, cg);
+   // done, OOL helper will return to this point with result in outlinedResultReg
+   // Mainline has result in spinePtrReg, so we need to merge them
+   TR::RegisterDependencyConditions *deps = generateRegisterDependencyConditions(0, 14, cg);
    deps->addPostCondition(tempReg, TR::RealRegister::NoReg, cg);
    deps->addPostCondition(spinePtrReg, TR::RealRegister::NoReg, cg);
+   deps->addPostCondition(outlinedResultReg, TR::RealRegister::NoReg, cg);
    deps->addPostCondition(leafPtrReg, TR::RealRegister::NoReg, cg);
 
    deps->addPostCondition(nDimsReg, TR::RealRegister::NoReg, cg);
@@ -1758,7 +1766,13 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
       }
 
    deps->stopAddingConditions();
+
    generateLabelInstruction(TR::InstOpCode::label, node, doneLabel, deps, cg);
+
+   // Mainline path has result in spinePtrReg, outlined path has it in outlinedResultReg
+   // Copy mainline result to outlinedResultReg so both paths use the same register
+   generateRegRegInstruction(TR::InstOpCode::MOV8RegReg, node, outlinedResultReg, spinePtrReg, cg);
+   TR::Register *returnReg = outlinedResultReg;
 
    cg->stopUsingRegister(spineSizeReg);
    cg->stopUsingRegister(firstDimReg);
@@ -1766,10 +1780,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    cg->stopUsingRegister(secondDimReg);
    cg->stopUsingRegister(leafPtrReg);
    cg->stopUsingRegister(tempReg);
-
-   // now that the array is properly allocated, move into a collected reference register
-   TR::Register *returnReg = cg->allocateCollectedReferenceRegister();
-   generateRegRegInstruction(TR::InstOpCode::MOV8RegReg, node, returnReg, spinePtrReg, cg);
+   cg->stopUsingRegister(spinePtrReg);
 
    TR_Debug *debug = cg->getDebug();
    if (debug)
