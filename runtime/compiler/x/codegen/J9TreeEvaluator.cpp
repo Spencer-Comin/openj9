@@ -1723,8 +1723,10 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    generateRegInstruction(TR::InstOpCode::DEC8Reg, node, firstDimReg, cg);
    generateLabelInstruction(TR::InstOpCode::JG4, node, loopLabel, cg);
 
-   // done, OOL helper will return to this point with result in outlinedResultReg
-   // Mainline has result in spinePtrReg, so we need to merge them
+   // Mainline path: copy result from spinePtrReg to outlinedResultReg before merging
+   generateRegRegInstruction(TR::InstOpCode::MOV8RegReg, node, outlinedResultReg, spinePtrReg, cg);
+
+   // done, OOL helper will return to this point with result already in outlinedResultReg
    TR::RegisterDependencyConditions *deps = generateRegisterDependencyConditions(0, 14, cg);
    deps->addPostCondition(tempReg, TR::RealRegister::NoReg, cg);
    deps->addPostCondition(spinePtrReg, TR::RealRegister::NoReg, cg);
@@ -1769,9 +1771,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
 
    generateLabelInstruction(TR::InstOpCode::label, node, doneLabel, deps, cg);
 
-   // Mainline path has result in spinePtrReg, outlined path has it in outlinedResultReg
-   // Copy mainline result to outlinedResultReg so both paths use the same register
-   generateRegRegInstruction(TR::InstOpCode::MOV8RegReg, node, outlinedResultReg, spinePtrReg, cg);
+   // Both paths now have result in outlinedResultReg
    TR::Register *returnReg = outlinedResultReg;
 
    cg->stopUsingRegister(spineSizeReg);
