@@ -1688,11 +1688,10 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
 
    if (canCombineClassAndSize)
       {
-      // Combine class and size into spineSizeReg (which is 0 after REPSTOS at line 1669)
+      // Combine class and size into tempReg
       // Layout: low 32 bits = class, high 32 bits = size
-      generateRegRegInstruction(TR::InstOpCode::MOV4RegReg, node, spineSizeReg, tempReg, cg);
-      generateRegMemInstruction(TR::InstOpCode::SHL8RegImm1, node, spineSizeReg, 32, cg);
-      generateRegRegInstruction(TR::InstOpCode::OR4RegReg, node, spineSizeReg, secondDimReg, cg);
+      generateRegImmInstruction(TR::InstOpCode::SHL8RegImm1, node, tempReg, 32, cg);
+      generateRegRegInstruction(TR::InstOpCode::MOV4RegReg, node, tempReg, secondDimReg, cg);
       }
 
    // adjust leafPtr to prepare for loop
@@ -1705,12 +1704,10 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    // initialise leaf array
    if (canCombineClassAndSize)
       {
-      // Use combined register for single 8-byte write
-      generateMemRegInstruction(TR::InstOpCode::S8MemReg, node, generateX86MemoryReference(leafPtrReg, classOffset, cg), spineSizeReg, cg);
+      generateMemRegInstruction(TR::InstOpCode::S8MemReg, node, generateX86MemoryReference(leafPtrReg, classOffset, cg), tempReg, cg);
       }
    else
       {
-      // Fall back to two separate writes
       generateMemRegInstruction(TR::InstOpCode::SMemReg(use64BitClasses), node, generateX86MemoryReference(leafPtrReg, classOffset, cg), tempReg, cg);
       generateMemRegInstruction(TR::InstOpCode::S4MemReg, node, generateX86MemoryReference(leafPtrReg, sizeOffset, cg), secondDimReg, cg);
       }
