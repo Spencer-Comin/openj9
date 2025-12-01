@@ -1691,7 +1691,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
       // Combine class and size into tempReg
       // Layout: low 32 bits = class, high 32 bits = size
       generateRegImmInstruction(TR::InstOpCode::SHL8RegImm1, node, tempReg, 32, cg);
-      generateRegRegInstruction(TR::InstOpCode::MOV4RegReg, node, tempReg, secondDimReg, cg);
+      generateRegRegInstruction(TR::InstOpCode::OR4RegReg, node, tempReg, secondDimReg, cg);
       }
 
    // adjust leafPtr to prepare for loop
