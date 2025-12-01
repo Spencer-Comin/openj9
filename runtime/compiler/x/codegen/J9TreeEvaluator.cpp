@@ -1682,6 +1682,19 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    generateRegMemInstruction(TR::InstOpCode::L8RegMem, node, tempReg,
             generateX86MemoryReference(classReg, offsetof(J9ArrayClass, componentType), cg), cg);
 
+   // Check if we can optimize by combining class and size into a single 8-byte write
+   // This is possible when using compressed headers and the fields are adjacent
+   bool canCombineClassAndSize = !use64BitClasses && (classOffset + 4 == sizeOffset);
+
+   if (canCombineClassAndSize)
+      {
+      // Combine class and size into spineSizeReg (which is 0 after REPSTOS at line 1669)
+      // Layout: low 32 bits = class, high 32 bits = size
+      generateRegRegInstruction(TR::InstOpCode::MOV4RegReg, node, spineSizeReg, tempReg, cg);
+      generateRegMemInstruction(TR::InstOpCode::SHL8RegImm1, node, spineSizeReg, 32, cg);
+      generateRegRegInstruction(TR::InstOpCode::OR4RegReg, node, spineSizeReg, secondDimReg, cg);
+      }
+
    // adjust leafPtr to prepare for loop
    generateRegRegInstruction(TR::InstOpCode::SUB8RegReg, node, leafPtrReg, leafSizeReg, cg);
 
@@ -1690,9 +1703,17 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    generateLabelInstruction(TR::InstOpCode::label, node, loopLabel, cg);
 
    // initialise leaf array
-   // TODO: squash into one register if possible
-   generateMemRegInstruction(TR::InstOpCode::SMemReg(use64BitClasses), node, generateX86MemoryReference(leafPtrReg, classOffset, cg), tempReg, cg);
-   generateMemRegInstruction(TR::InstOpCode::S4MemReg, node, generateX86MemoryReference(leafPtrReg, sizeOffset, cg), secondDimReg, cg);
+   if (canCombineClassAndSize)
+      {
+      // Use combined register for single 8-byte write
+      generateMemRegInstruction(TR::InstOpCode::S8MemReg, node, generateX86MemoryReference(leafPtrReg, classOffset, cg), spineSizeReg, cg);
+      }
+   else
+      {
+      // Fall back to two separate writes
+      generateMemRegInstruction(TR::InstOpCode::SMemReg(use64BitClasses), node, generateX86MemoryReference(leafPtrReg, classOffset, cg), tempReg, cg);
+      generateMemRegInstruction(TR::InstOpCode::S4MemReg, node, generateX86MemoryReference(leafPtrReg, sizeOffset, cg), secondDimReg, cg);
+      }
 
    // insert leaf array reference into spine array
    // spinePtr[first dim * reference size + (header bytes - reference size)] = leafPtr
