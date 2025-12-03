@@ -1525,7 +1525,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    TR::LabelSymbol *doneLabel = generateLabelSymbol(cg);
    TR::LabelSymbol *gotoHelperLabel = generateLabelSymbol(cg);
    doneLabel->setEndInternalControlFlow();
-   TR::Register *spinePtrReg = cg->allocateRegister();
+   TR::Register *spinePtrReg = cg->allocateRegister("spinePtr");
    TR_OutlinedInstructions *outlinedHelperCall = new (cg->trHeapMemory()) TR_OutlinedInstructions(node, TR::acall, spinePtrReg, helperLabel, doneLabel, cg);
    cg->generateDebugCounter(
          outlinedHelperCall->getFirstInstruction(),
@@ -1538,14 +1538,14 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    TR::Register *dimsPtrReg = cg->evaluate(dimsPtrNode);
    TR::Register *classReg = cg->evaluate(classNode);
 
-   TR::Register *spineSizeReg = cg->allocateRegister();
+   TR::Register *spineSizeReg = cg->allocateRegister("spineSize");
    generateRegImmInstruction(TR::InstOpCode::MOV8RegImm4, node, spineSizeReg, contiguousArrayHeaderSize, cg);
 
    int32_t zeroArraySizeAligned = OMR::align(TR::Compiler->om.discontiguousArrayHeaderSizeInBytes(), TR::Compiler->om.getObjectAlignmentInBytes());
-   TR::Register *tempReg = cg->allocateRegister();
+   TR::Register *tempReg = cg->allocateRegister("temp");
    generateRegImmInstruction(TR::InstOpCode::MOV8RegImm4, node, tempReg, zeroArraySizeAligned, cg);
 
-   TR::Register *firstDimReg = cg->allocateRegister();
+   TR::Register *firstDimReg = cg->allocateRegister("firstDim");
    generateRegMemInstruction(TR::InstOpCode::MOVSXReg8Mem4, node, firstDimReg, generateX86MemoryReference(dimsPtrReg, 4, cg), cg);
 
    // if first dim = 0 skip over loading the first dimension and calculating the leaf size
@@ -1572,11 +1572,11 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
       generateRegImmInstruction(TR::InstOpCode::AND4RegImm4, node, spineSizeReg, -alignmentInBytes, cg);
       }
 
-   TR::Register *secondDimReg = cg->allocateRegister();
+   TR::Register *secondDimReg = cg->allocateRegister("secondDim");
    generateRegMemInstruction(TR::InstOpCode::MOVSXReg8Mem4, node, secondDimReg, generateX86MemoryReference(dimsPtrReg, 0, cg), cg);
 
    // leaf size = second dim == 0 ? aligned discontiguous header size : contiguous header size + second dim * leaf element size + padding
-   TR::Register *leafSizeReg = cg->allocateRegister();
+   TR::Register *leafSizeReg = cg->allocateRegister("leafSize");
    generateRegImmInstruction(TR::InstOpCode::MOV8RegImm4, node, leafSizeReg, contiguousArrayHeaderSize, cg);
    generateRegImmInstruction(TR::InstOpCode::MOV8RegImm4, node, tempReg, zeroArraySizeAligned, cg);
    generateRegImmInstruction(TR::InstOpCode::CMP8RegImm4, node, secondDimReg, 0, cg);
@@ -1619,7 +1619,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    // spineSize += leafBlockSize
    generateRegRegInstruction(TR::InstOpCode::ADD8RegReg, node, spineSizeReg, tempReg, cg);
    // allocEnd = spinePtr + spineSize + leafBlockSize
-   TR::Register *leafPtrReg = cg->allocateRegister();
+   TR::Register *leafPtrReg = cg->allocateRegister("leafPtr");
    generateRegMemInstruction(TR::InstOpCode::LEA8RegMem, node, leafPtrReg, generateX86MemoryReference(spinePtrReg, spineSizeReg, 0, 0, cg), cg);
 
    // if allocEnd >= vmThread->heapTop go to helper
@@ -1794,23 +1794,6 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    // now that the array is properly allocated, move into a collected reference register
    TR::Register *returnReg = cg->allocateCollectedReferenceRegister();
    generateRegRegInstruction(TR::InstOpCode::MOV8RegReg, node, returnReg, spinePtrReg, cg);
-
-   TR_Debug *debug = cg->getDebug();
-   if (debug)
-      {
-      debug->nameRegister(nDimsReg, "nDims");
-      debug->nameRegister(dimsPtrReg, "dimsPtr");
-      debug->nameRegister(spinePtrReg, "spinePtr");
-      debug->nameRegister(classReg, "class");
-      debug->nameRegister(spineSizeReg, "spineSize");
-      debug->nameRegister(firstDimReg, "firstDim");
-      debug->nameRegister(leafSizeReg, "leafSize");
-      debug->nameRegister(secondDimReg, "secondDim");
-      debug->nameRegister(vmThreadReg, "vmThread");
-      debug->nameRegister(leafPtrReg, "leafPtr");
-      debug->nameRegister(tempReg, "temp");
-      debug->nameRegister(returnReg, "return");
-      }
 
    node->setRegister(returnReg);
    return returnReg;
