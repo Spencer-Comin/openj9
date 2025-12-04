@@ -1678,13 +1678,13 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    generateRegImmInstruction(TR::InstOpCode::CMP8RegImm4, node, firstDimReg, 0, cg);
    generateLabelInstruction(TR::InstOpCode::JE4, node, doneLabel, cg);
 
-   // load element class
-   generateRegMemInstruction(TR::InstOpCode::L8RegMem, node, tempReg,
-            generateX86MemoryReference(classReg, offsetof(J9ArrayClass, componentType), cg), cg);
-
    // Check if we can optimize by combining class and size into a single 8-byte write
    // This is possible when using compressed headers and the fields are adjacent
    bool arrayHeaderFitsInGPR = !use64BitClasses && ((classOffset + 4) == sizeOffset);
+
+   // load element class
+   generateRegMemInstruction(arrayHeaderFitsInGPR ? TR::InstOpCode::MOVZXReg8Mem4 : TR::InstOpCode::LRegMem(use64BitClasses), node, tempReg,
+            generateX86MemoryReference(classReg, offsetof(J9ArrayClass, componentType), cg), cg);
 
    if (arrayHeaderFitsInGPR)
       {
