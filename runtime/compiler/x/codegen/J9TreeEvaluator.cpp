@@ -1683,7 +1683,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    bool arrayHeaderFitsInGPR = !use64BitClasses && ((classOffset + 4) == sizeOffset);
 
    // load element class
-   generateRegMemInstruction(arrayHeaderFitsInGPR ? TR::InstOpCode::MOVZXReg8Mem4 : TR::InstOpCode::LRegMem(use64BitClasses), node, tempReg,
+   generateRegMemInstruction(TR::InstOpCode::LRegMem(use64BitClasses), node, tempReg,
             generateX86MemoryReference(classReg, offsetof(J9ArrayClass, componentType), cg), cg);
 
    if (arrayHeaderFitsInGPR)
