@@ -1684,14 +1684,14 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
 
    // Check if we can optimize by combining class and size into a single 8-byte write
    // This is possible when using compressed headers and the fields are adjacent
-   bool canCombineClassAndSize = !use64BitClasses && (classOffset + 4 == sizeOffset);
+   bool arrayHeaderFitsInGPR = !use64BitClasses && ((classOffset + 4) == sizeOffset);
 
-   if (canCombineClassAndSize)
+   if (arrayHeaderFitsInGPR)
       {
-      // Combine class and size into tempReg
+      // Combine class and size into secondDimReg
       // Layout: low 32 bits = class, high 32 bits = size
-      generateRegImmInstruction(TR::InstOpCode::SHL8RegImm1, node, tempReg, 32, cg);
-      generateRegRegInstruction(TR::InstOpCode::OR4RegReg, node, tempReg, secondDimReg, cg);
+      generateRegImmInstruction(TR::InstOpCode::SHL8RegImm1, node, secondDimReg, 32, cg);
+      generateRegRegInstruction(TR::InstOpCode::OR8RegReg, node, secondDimReg, tempReg, cg);
       }
 
    // adjust leafPtr to prepare for loop
@@ -1702,9 +1702,9 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    generateLabelInstruction(TR::InstOpCode::label, node, loopLabel, cg);
 
    // initialise leaf array
-   if (canCombineClassAndSize)
+   if (arrayHeaderFitsInGPR)
       {
-      generateMemRegInstruction(TR::InstOpCode::S8MemReg, node, generateX86MemoryReference(leafPtrReg, classOffset, cg), tempReg, cg);
+      generateMemRegInstruction(TR::InstOpCode::S8MemReg, node, generateX86MemoryReference(leafPtrReg, classOffset, cg), secondDimReg, cg);
       }
    else
       {
