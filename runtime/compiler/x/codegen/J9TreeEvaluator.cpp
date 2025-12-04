@@ -1792,7 +1792,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    cg->stopUsingRegister(tempReg);
 
    // now that the array is properly allocated, move into a collected reference register
-   TR::Register *returnReg = cg->allocateCollectedReferenceRegister();
+   TR::Register *returnReg = cg->allocateCollectedReferenceRegister("array");
    generateRegRegInstruction(TR::InstOpCode::MOV8RegReg, node, returnReg, spinePtrReg, cg);
 
    node->setRegister(returnReg);
