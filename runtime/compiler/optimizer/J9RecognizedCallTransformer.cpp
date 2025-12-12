@@ -1879,21 +1879,29 @@ bool J9::RecognizedCallTransformer::isInlineable(TR::TreeTop* treetop)
       switch(rm)
          {
          case TR::jdk_internal_misc_Unsafe_getAndAddByte:
+            return !comp()->getOption(TR_DisableUnsafe) && !comp()->compileRelocatableCode() && !TR::Compiler->om.canGenerateArraylets() &&
+               cg()->supportsNonHelper(TR::SymbolReferenceTable::atomicFetchAndAdd8BitSymbol);
          case TR::jdk_internal_misc_Unsafe_getAndAddShort:
+            return !comp()->getOption(TR_DisableUnsafe) && !comp()->compileRelocatableCode() && !TR::Compiler->om.canGenerateArraylets() &&
+               cg()->supportsNonHelper(TR::SymbolReferenceTable::atomicFetchAndAdd16BitSymbol);
          case TR::sun_misc_Unsafe_getAndAddInt:
             return !comp()->getOption(TR_DisableUnsafe) && !comp()->compileRelocatableCode() && !TR::Compiler->om.canGenerateArraylets() &&
-               cg()->supportsNonHelper(TR::SymbolReferenceTable::atomicFetchAndAddSymbol);
+               cg()->supportsNonHelper(TR::SymbolReferenceTable::atomicFetchAndAdd32BitSymbol);
          case TR::jdk_internal_misc_Unsafe_getAndSetByte:
+            return !comp()->getOption(TR_DisableUnsafe) && !comp()->compileRelocatableCode() && !TR::Compiler->om.canGenerateArraylets() &&
+               cg()->supportsNonHelper(TR::SymbolReferenceTable::atomicSwap8BitSymbol);
          case TR::jdk_internal_misc_Unsafe_getAndSetShort:
+            return !comp()->getOption(TR_DisableUnsafe) && !comp()->compileRelocatableCode() && !TR::Compiler->om.canGenerateArraylets() &&
+               cg()->supportsNonHelper(TR::SymbolReferenceTable::atomicSwap16BitSymbol);
          case TR::sun_misc_Unsafe_getAndSetInt:
             return !comp()->getOption(TR_DisableUnsafe) && !comp()->compileRelocatableCode() && !TR::Compiler->om.canGenerateArraylets() &&
-               cg()->supportsNonHelper(TR::SymbolReferenceTable::atomicSwapSymbol);
+               cg()->supportsNonHelper(TR::SymbolReferenceTable::atomicSwap32BitSymbol);
          case TR::sun_misc_Unsafe_getAndAddLong:
             return !comp()->getOption(TR_DisableUnsafe) && !comp()->compileRelocatableCode() && !TR::Compiler->om.canGenerateArraylets() && comp()->target().is64Bit() &&
-               cg()->supportsNonHelper(TR::SymbolReferenceTable::atomicFetchAndAddSymbol);
+               cg()->supportsNonHelper(TR::SymbolReferenceTable::atomicFetchAndAdd64BitSymbol);
          case TR::sun_misc_Unsafe_getAndSetLong:
             return !comp()->getOption(TR_DisableUnsafe) && !comp()->compileRelocatableCode() && !TR::Compiler->om.canGenerateArraylets() && comp()->target().is64Bit() &&
-               cg()->supportsNonHelper(TR::SymbolReferenceTable::atomicSwapSymbol);
+               cg()->supportsNonHelper(TR::SymbolReferenceTable::atomicSwap64BitSymbol);
          case TR::java_lang_Class_isAssignableFrom:
             return cg()->supportsInliningOfIsAssignableFrom();
          case TR::java_lang_Class_cast:
@@ -2006,16 +2014,28 @@ void J9::RecognizedCallTransformer::transform(TR::TreeTop* treetop)
       switch(rm)
          {
          case TR::jdk_internal_misc_Unsafe_getAndAddByte:
+            processUnsafeAtomicCall(treetop, TR::SymbolReferenceTable::atomicFetchAndAdd8BitSymbol);
+            break;
          case TR::jdk_internal_misc_Unsafe_getAndAddShort:
+            processUnsafeAtomicCall(treetop, TR::SymbolReferenceTable::atomicFetchAndAdd16BitSymbol);
+            break;
          case TR::sun_misc_Unsafe_getAndAddInt:
+            processUnsafeAtomicCall(treetop, TR::SymbolReferenceTable::atomicFetchAndAdd32BitSymbol);
+            break;
          case TR::sun_misc_Unsafe_getAndAddLong:
-            processUnsafeAtomicCall(treetop, TR::SymbolReferenceTable::atomicFetchAndAddSymbol);
+            processUnsafeAtomicCall(treetop, TR::SymbolReferenceTable::atomicFetchAndAdd64BitSymbol);
             break;
          case TR::jdk_internal_misc_Unsafe_getAndSetByte:
+            processUnsafeAtomicCall(treetop, TR::SymbolReferenceTable::atomicSwap8BitSymbol);
+            break;
          case TR::jdk_internal_misc_Unsafe_getAndSetShort:
+            processUnsafeAtomicCall(treetop, TR::SymbolReferenceTable::atomicSwap16BitSymbol);
+            break;
          case TR::sun_misc_Unsafe_getAndSetInt:
+            processUnsafeAtomicCall(treetop, TR::SymbolReferenceTable::atomicSwap32BitSymbol);
+            break;
          case TR::sun_misc_Unsafe_getAndSetLong:
-            processUnsafeAtomicCall(treetop, TR::SymbolReferenceTable::atomicSwapSymbol);
+            processUnsafeAtomicCall(treetop, TR::SymbolReferenceTable::atomicSwap64BitSymbol);
             break;
          case TR::java_lang_Class_isAssignableFrom:
             process_java_lang_Class_IsAssignableFrom(treetop, node);

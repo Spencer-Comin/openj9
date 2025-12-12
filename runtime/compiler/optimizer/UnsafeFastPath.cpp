@@ -112,17 +112,21 @@ static TR::SymbolReferenceTable::CommonNonhelperSymbol equivalentAtomicIntrinsic
    switch (rm)
       {
       case TR::jdk_internal_misc_Unsafe_getAndSetByte:
+           return TR::SymbolReferenceTable::atomicSwap8BitSymbol;
       case TR::jdk_internal_misc_Unsafe_getAndSetShort:
+           return TR::SymbolReferenceTable::atomicSwap16BitSymbol;
       case TR::sun_misc_Unsafe_getAndSetInt:
-           return TR::SymbolReferenceTable::atomicSwapSymbol;
+           return TR::SymbolReferenceTable::atomicSwap64BitSymbol;
       case TR::sun_misc_Unsafe_getAndSetLong:
-           return comp->target().is64Bit() ? TR::SymbolReferenceTable::atomicSwapSymbol : TR::SymbolReferenceTable::lastCommonNonhelperSymbol;
+           return comp->target().is64Bit() ? TR::SymbolReferenceTable::atomicSwap64BitSymbol : TR::SymbolReferenceTable::lastCommonNonhelperSymbol;
       case TR::jdk_internal_misc_Unsafe_getAndAddByte:
+           return TR::SymbolReferenceTable::atomicFetchAndAdd8BitSymbol;
       case TR::jdk_internal_misc_Unsafe_getAndAddShort:
+           return TR::SymbolReferenceTable::atomicFetchAndAdd16BitSymbol;
       case TR::sun_misc_Unsafe_getAndAddInt:
-           return TR::SymbolReferenceTable::atomicFetchAndAddSymbol;
+           return TR::SymbolReferenceTable::atomicFetchAndAdd32BitSymbol;
       case TR::sun_misc_Unsafe_getAndAddLong:
-           return comp->target().is64Bit() ? TR::SymbolReferenceTable::atomicFetchAndAddSymbol : TR::SymbolReferenceTable::lastCommonNonhelperSymbol;
+           return comp->target().is64Bit() ? TR::SymbolReferenceTable::atomicFetchAndAdd64BitSymbol : TR::SymbolReferenceTable::lastCommonNonhelperSymbol;
       default:
          break;
       }
