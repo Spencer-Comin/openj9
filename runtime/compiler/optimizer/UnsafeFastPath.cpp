@@ -116,7 +116,7 @@ static TR::SymbolReferenceTable::CommonNonhelperSymbol equivalentAtomicIntrinsic
       case TR::jdk_internal_misc_Unsafe_getAndSetShort:
            return TR::SymbolReferenceTable::atomicSwap16BitSymbol;
       case TR::sun_misc_Unsafe_getAndSetInt:
-           return TR::SymbolReferenceTable::atomicSwap64BitSymbol;
+           return TR::SymbolReferenceTable::atomicSwap32BitSymbol;
       case TR::sun_misc_Unsafe_getAndSetLong:
            return comp->target().is64Bit() ? TR::SymbolReferenceTable::atomicSwap64BitSymbol : TR::SymbolReferenceTable::lastCommonNonhelperSymbol;
       case TR::jdk_internal_misc_Unsafe_getAndAddByte:
