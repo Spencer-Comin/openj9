@@ -84,7 +84,7 @@ class TR_LoopAliasRefiner: public TR_LoopVersioner
    public:
    TR_LoopAliasRefiner(TR::OptimizationManager *manager);
 
-   virtual const char * optDetailString() const throw();
+   virtual const char * optDetailString() const noexcept;
    static TR::Optimization *create(TR::OptimizationManager *manager)
       {
       return new (manager->allocator()) TR_LoopAliasRefiner(manager);

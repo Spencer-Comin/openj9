@@ -40,7 +40,7 @@
 
 
 const char *
-TR_VectorAPIExpansion::optDetailString() const throw()
+TR_VectorAPIExpansion::optDetailString() const noexcept
    {
    return "O^O VECTOR API EXPANSION: ";
    }

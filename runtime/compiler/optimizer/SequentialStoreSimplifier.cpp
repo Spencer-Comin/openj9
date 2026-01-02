@@ -4055,7 +4055,7 @@ int32_t TR_SequentialStoreSimplifier::perform()
    }
 
 const char *
-TR_SequentialStoreSimplifier::optDetailString() const throw()
+TR_SequentialStoreSimplifier::optDetailString() const noexcept
    {
    return "O^O SEQUENTIAL STORE TRANSFORMATION: ";
    }

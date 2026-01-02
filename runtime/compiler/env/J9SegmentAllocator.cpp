@@ -37,19 +37,19 @@ namespace J9 {
 SegmentAllocator::SegmentAllocator(
    int32_t segmentType,
    J9JavaVM &javaVM
-   ) throw() :
+   ) noexcept :
    _segmentType(segmentType),
    _javaVM(javaVM)
    {
    TR_ASSERT(((pageSize() & (pageSize()-1)) == 0), "Page size is not a power of 2, %llu", static_cast<unsigned long long>(pageSize()) );
    }
 
-SegmentAllocator::~SegmentAllocator() throw()
+SegmentAllocator::~SegmentAllocator() noexcept
    {
    }
 
 J9MemorySegment *
-SegmentAllocator::allocate(const size_t segmentSize, const std::nothrow_t &tag) throw()
+SegmentAllocator::allocate(const size_t segmentSize, const std::nothrow_t &tag) noexcept
    {
    size_t const alignedSize = pageAlign(segmentSize);
 
@@ -107,7 +107,7 @@ SegmentAllocator::allocate(size_t const segmentSize)
    }
 
 void
-SegmentAllocator::deallocate(J9MemorySegment &unusedSegment) throw()
+SegmentAllocator::deallocate(J9MemorySegment &unusedSegment) noexcept
    {
    _javaVM.internalVMFunctions->freeMemorySegment(&_javaVM, &unusedSegment, TRUE);
    }
@@ -119,13 +119,13 @@ SegmentAllocator::request(size_t segmentSize)
    }
 
 void
-SegmentAllocator::release(J9MemorySegment &unusedSegment) throw()
+SegmentAllocator::release(J9MemorySegment &unusedSegment) noexcept
    {
    deallocate(unusedSegment);
    }
 
 size_t
-SegmentAllocator::pageSize() throw()
+SegmentAllocator::pageSize() noexcept
    {
    PORT_ACCESS_FROM_JAVAVM(&_javaVM);
    static const size_t pageSize = j9vmem_supported_page_sizes()[0];
@@ -133,7 +133,7 @@ SegmentAllocator::pageSize() throw()
    }
 
 size_t
-SegmentAllocator::pageAlign(const size_t requestedSize) throw()
+SegmentAllocator::pageAlign(const size_t requestedSize) noexcept
    {
    size_t const pageSize = this->pageSize();
    size_t alignedSize = OMR::align(requestedSize, pageSize);

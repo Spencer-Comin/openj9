@@ -116,7 +116,7 @@ int32_t TR_StaticFinalFieldFolding::perform()
    }
 
 const char *
-TR_StaticFinalFieldFolding::optDetailString() const throw()
+TR_StaticFinalFieldFolding::optDetailString() const noexcept
    {
    return "O^O STATIC FINAL FIELD FOLDING: ";
    }

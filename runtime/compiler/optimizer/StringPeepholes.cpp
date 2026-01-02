@@ -278,7 +278,7 @@ void TR_StringPeepholes::prePerformOnBlocks()
    }
 
 const char *
-TR_StringPeepholes::optDetailString() const throw()
+TR_StringPeepholes::optDetailString() const noexcept
    {
    return "O^O STRING PEEPHOLES: ";
    }

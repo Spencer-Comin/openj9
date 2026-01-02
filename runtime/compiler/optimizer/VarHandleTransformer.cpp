@@ -364,7 +364,7 @@ return 0;
 }
 
 const char *
-TR_VarHandleTransformer::optDetailString() const throw()
+TR_VarHandleTransformer::optDetailString() const noexcept
    {
    return "O^O VARHANDLE TRANSFORMER: ";
    }

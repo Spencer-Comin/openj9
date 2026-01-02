@@ -83,7 +83,7 @@ int32_t TR_LocalNewInitialization::perform()
    }
 
 const char *
-TR_LocalNewInitialization::optDetailString() const throw()
+TR_LocalNewInitialization::optDetailString() const noexcept
    {
    return "O^O EXPLICIT NEW INITIALIZATION: ";
    }

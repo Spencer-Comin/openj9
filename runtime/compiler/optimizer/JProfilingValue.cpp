@@ -1081,7 +1081,7 @@ TR_JProfilingValue::computeHash(TR::Compilation *comp, TR_AbstractHashTableProfi
    }
 
 const char *
-TR_JProfilingValue::optDetailString() const throw()
+TR_JProfilingValue::optDetailString() const noexcept
    {
    return "O^O JPROFILING VALUE: ";
    }

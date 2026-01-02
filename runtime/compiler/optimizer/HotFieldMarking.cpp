@@ -206,7 +206,7 @@ int32_t TR_HotFieldMarking::getUtilization()
    }
 
 const char *
-TR_HotFieldMarking::optDetailString() const throw()
+TR_HotFieldMarking::optDetailString() const noexcept
    {
    return "O^O HOT FIELD MARKING: ";
    }

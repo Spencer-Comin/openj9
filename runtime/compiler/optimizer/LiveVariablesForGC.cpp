@@ -113,7 +113,7 @@ int32_t TR_LocalLiveVariablesForGC::perform()
    }
 
 const char *
-TR_LocalLiveVariablesForGC::optDetailString() const throw()
+TR_LocalLiveVariablesForGC::optDetailString() const noexcept
    {
    return "O^O LOCAL LIVE VARIABLES FOR GC: ";
    }
@@ -289,7 +289,7 @@ int32_t TR_GlobalLiveVariablesForGC::perform()
    }
 
 const char *
-TR_GlobalLiveVariablesForGC::optDetailString() const throw()
+TR_GlobalLiveVariablesForGC::optDetailString() const noexcept
    {
    return "O^O GLOBAL LIVE VARIABLES FOR GC: ";
    }

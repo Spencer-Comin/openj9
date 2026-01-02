@@ -325,7 +325,7 @@ class CRRuntime
     *            object as part leaving the scope, or stack unwinding, which
     *            will attempt to release the monitor in its destructor.
     */
-   void releaseCompMonitorUntilNotifiedOnCRMonitor() throw();
+   void releaseCompMonitorUntilNotifiedOnCRMonitor() noexcept;
 
    /**
     * @brief Compile methods for checkpoint.

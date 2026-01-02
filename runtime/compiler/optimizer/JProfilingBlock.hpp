@@ -61,7 +61,7 @@ class TR_JProfilingBlock : public TR::Optimization
       }
 
    virtual int32_t perform();
-   virtual const char * optDetailString() const throw();
+   virtual const char * optDetailString() const noexcept;
    protected:
    void computeMinimumSpanningTree(BlockParents &parents, BlockPriorityQueue &Q, TR::StackMemoryRegion &stackMemoryRegion);
    int32_t processCFGForCounting(BlockParents &parent, TR::BlockChecklist &countedBlocks, TR::CFGEdge &loopBack);

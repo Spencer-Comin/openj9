@@ -21,7 +21,7 @@
  *******************************************************************************/
 
 #ifndef UNSAFEFASTPATH_INCL
-#define UNSAFEFASTPATH_INCL 
+#define UNSAFEFASTPATH_INCL
 
 #include <stdint.h>
 #include "il/Node.hpp"
@@ -41,7 +41,7 @@ class TR_UnsafeFastPath : public TR::Optimization
       }
 
    virtual int32_t perform();
-   virtual const char * optDetailString() const throw();
+   virtual const char * optDetailString() const noexcept;
    bool tryTransformUnsafeAtomicCallInVarHandleAccessMethod(TR::TreeTop* callTree, TR::RecognizedMethod callerMethod, TR::RecognizedMethod calleeMethod);
    };
 #endif

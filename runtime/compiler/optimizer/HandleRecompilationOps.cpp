@@ -29,7 +29,7 @@ TR_HandleRecompilationOps::perform()
    }
 
 const char *
-TR_HandleRecompilationOps::optDetailString() const throw()
+TR_HandleRecompilationOps::optDetailString() const noexcept
    {
    return "O^O HANDLE RECOMPILATION OPERATIONS:";
    }

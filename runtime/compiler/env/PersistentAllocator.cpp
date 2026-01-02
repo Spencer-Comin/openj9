@@ -72,7 +72,7 @@ PersistentAllocator::PersistentAllocator(const PersistentAllocatorKit &creationK
       throw std::bad_alloc();
    }
 
-PersistentAllocator::~PersistentAllocator() throw()
+PersistentAllocator::~PersistentAllocator() noexcept
    {
    while (!_segments.empty())
       {
@@ -89,7 +89,7 @@ PersistentAllocator::~PersistentAllocator() throw()
    }
 
 void *
-PersistentAllocator::allocate(size_t size, const std::nothrow_t tag, void * hint) throw()
+PersistentAllocator::allocate(size_t size, const std::nothrow_t tag, void * hint) noexcept
    {
    return allocateInternal(size);
    }
@@ -388,7 +388,7 @@ PersistentAllocator::findUsableSegment(size_t requiredSize)
    }
 
 size_t
-PersistentAllocator::remainingSpace(J9MemorySegment &segment) throw()
+PersistentAllocator::remainingSpace(J9MemorySegment &segment) noexcept
    {
    return (segment.heapTop - segment.heapAlloc);
    }
@@ -664,7 +664,7 @@ PersistentAllocator::freeBlock(Block *block)
    }
 
 void
-PersistentAllocator::deallocate(void * mem, size_t) throw()
+PersistentAllocator::deallocate(void * mem, size_t) noexcept
    {
    Block * block = static_cast<Block *>(mem) - 1;
 #if defined(J9VM_OPT_JITSERVER)
@@ -784,12 +784,12 @@ void *operator new[](size_t size, J9::PersistentAllocator &persistentAllocator)
    return operator new(size, persistentAllocator);
    }
 
-void operator delete(void *garbage, J9::PersistentAllocator &persistentAllocator) throw()
+void operator delete(void *garbage, J9::PersistentAllocator &persistentAllocator) noexcept
    {
    persistentAllocator.deallocate(garbage);
    }
 
-void operator delete[](void *ptr, J9::PersistentAllocator &persistentAllocator) throw()
+void operator delete[](void *ptr, J9::PersistentAllocator &persistentAllocator) noexcept
    {
    operator delete(ptr, persistentAllocator);
    }

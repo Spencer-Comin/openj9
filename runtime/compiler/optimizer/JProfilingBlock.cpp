@@ -1107,7 +1107,7 @@ int32_t TR_JProfilingBlock::perform()
    }
 
 const char *
-TR_JProfilingBlock::optDetailString() const throw()
+TR_JProfilingBlock::optDetailString() const noexcept
    {
    return "O^O JPROFILING BLOCK: ";
    }

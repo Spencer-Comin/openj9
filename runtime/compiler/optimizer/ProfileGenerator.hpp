@@ -47,7 +47,7 @@ class TR_ProfileGenerator : public TR::Optimization
       }
 
    virtual int32_t perform();
-   virtual const char * optDetailString() const throw();
+   virtual const char * optDetailString() const noexcept;
 
    private :
 

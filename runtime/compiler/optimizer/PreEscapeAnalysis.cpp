@@ -114,7 +114,7 @@ int32_t TR_PreEscapeAnalysis::perform()
    }
 
 const char *
-TR_PreEscapeAnalysis::optDetailString() const throw()
+TR_PreEscapeAnalysis::optDetailString() const noexcept
    {
    return "O^O PRE ESCAPE ANALYSIS: ";
    }

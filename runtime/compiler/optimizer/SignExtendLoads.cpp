@@ -810,7 +810,7 @@ int32_t TR_SignExtendLoads::perform()
    }
 
 const char *
-TR_SignExtendLoads::optDetailString() const throw()
+TR_SignExtendLoads::optDetailString() const noexcept
    {
    return "O^O SIGN EXTEND LOADS: ";
    }

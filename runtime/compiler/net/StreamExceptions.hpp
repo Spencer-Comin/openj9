@@ -34,7 +34,7 @@ public:
    StreamFailure() : _message("Generic stream failure"), _retryConnectionImmediately(false) { }
    StreamFailure(const std::string &message) : _message(message), _retryConnectionImmediately(false) { }
    StreamFailure(const std::string &message, bool shouldRetry) : _message(message), _retryConnectionImmediately(shouldRetry) { }
-   virtual const char* what() const throw() { return _message.c_str(); }
+   virtual const char* what() const noexcept { return _message.c_str(); }
    bool retryConnectionImmediately() const { return _retryConnectionImmediately; }
 private:
    std::string _message;
@@ -45,7 +45,7 @@ class StreamInterrupted: public virtual std::exception
    {
 public:
    StreamInterrupted() { }
-   virtual const char* what() const throw()
+   virtual const char* what() const noexcept
       {
       return "Compilation interrupted at JITClient's request";
       }
@@ -55,7 +55,7 @@ class StreamConnectionTerminate: public virtual std::exception
    {
 public:
    StreamConnectionTerminate() { }
-   virtual const char* what() const throw()
+   virtual const char* what() const noexcept
       {
       return "Connection terminated at JITClient's request";
       }
@@ -68,7 +68,7 @@ public:
       {
       _message = "JITClient session " + std::to_string(_clientId) + " terminated at JITClient's request";
       }
-   virtual const char* what() const throw()
+   virtual const char* what() const noexcept
       {
       return _message.c_str();
       }
@@ -84,7 +84,7 @@ private:
 class StreamOOO : public virtual std::exception
    {
    public:
-      virtual const char* what() const throw() { return "Messages arriving out-of-order"; }
+      virtual const char* what() const noexcept { return "Messages arriving out-of-order"; }
    };
 
 class StreamTypeMismatch: public virtual StreamFailure
@@ -104,7 +104,7 @@ public:
       _message = "JITServer expected message type " + std::to_string(serverType) + " " + expectedName +
                  " received " + std::to_string(clientType) + " " + receivedName;
       }
-   virtual const char* what() const throw()
+   virtual const char* what() const noexcept
       {
       return _message.c_str();
       }
@@ -117,7 +117,7 @@ class StreamVersionIncompatible: public virtual std::exception
 public:
    StreamVersionIncompatible() : _message("JITServer/JITClient incompatibility detected") { }
    StreamVersionIncompatible(const std::string &message) : _message(message) { }
-   virtual const char* what() const throw()
+   virtual const char* what() const noexcept
       {
       return _message.c_str();
       }
@@ -136,7 +136,7 @@ class ServerCompilationFailure: public virtual std::exception
 public:
    ServerCompilationFailure() : _message("Generic JITServer compilation failure") { }
    ServerCompilationFailure(const std::string &message) : _message(message) { }
-   virtual const char* what() const throw() { return _message.c_str(); }
+   virtual const char* what() const noexcept { return _message.c_str(); }
 private:
    std::string _message;
    };

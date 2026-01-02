@@ -585,7 +585,7 @@ TR::Node *TR_DynamicLiteralPool::getVMThreadAloadFromCurrentBlock(TR::Node *pare
    }
 
 const char *
-TR_DynamicLiteralPool::optDetailString() const throw()
+TR_DynamicLiteralPool::optDetailString() const noexcept
    {
    return "O^O DYNAMIC LITERAL POOL: ";
    }

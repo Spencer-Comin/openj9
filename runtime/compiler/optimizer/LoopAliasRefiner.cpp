@@ -52,7 +52,7 @@ TR_LoopAliasRefiner::TR_LoopAliasRefiner(TR::OptimizationManager *manager)
    {}
 
 const char *
-TR_LoopAliasRefiner::optDetailString() const throw()
+TR_LoopAliasRefiner::optDetailString() const noexcept
    {
    return "O^O LOOP ALIAS REFINER: ";
    }

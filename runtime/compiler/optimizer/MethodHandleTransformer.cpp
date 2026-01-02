@@ -649,7 +649,7 @@ TR_MethodHandleTransformer::processBlockAndUpdateObjectInfo(TR::Block *block, TR
    }
 
 const char *
-TR_MethodHandleTransformer::optDetailString() const throw()
+TR_MethodHandleTransformer::optDetailString() const noexcept
    {
    return "O^O METHODHANDLE TRANSFORMER: ";
    }

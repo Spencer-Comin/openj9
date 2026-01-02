@@ -42,7 +42,7 @@ J9::J9SegmentCache::J9SegmentCache(J9SegmentCache &donor) :
    donor._firstSegment = 0;
    }
 
-J9::J9SegmentCache::~J9SegmentCache() throw()
+J9::J9SegmentCache::~J9SegmentCache() noexcept
    {
    if (_firstSegment)
       _backingProvider.release(*_firstSegment);
@@ -64,7 +64,7 @@ J9::J9SegmentCache::request(size_t requiredSize)
    }
 
 void
-J9::J9SegmentCache::release(J9MemorySegment &unusedSegment) throw()
+J9::J9SegmentCache::release(J9MemorySegment &unusedSegment) noexcept
    {
    if ( &unusedSegment == _firstSegment )
       {

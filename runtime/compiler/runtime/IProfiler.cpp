@@ -556,7 +556,7 @@ TR_IProfiler::getProfilerMemoryFootprint()
    }
 
 void *
-TR_IProfiler::operator new (size_t size) throw()
+TR_IProfiler::operator new (size_t size) noexcept
    {
    memoryConsumed += (int32_t)size;
    return _allocator->allocate(size, std::nothrow);
@@ -2574,13 +2574,13 @@ TR_IProfiler::outputStats()
 
 
 void *
-TR_IPBytecodeHashTableEntry::operator new (size_t size) throw()
+TR_IPBytecodeHashTableEntry::operator new (size_t size) noexcept
    {
    memoryConsumed += (int32_t)size;
    return TR_IProfiler::allocator()->allocate(size, std::nothrow);
    }
 
-void TR_IPBytecodeHashTableEntry::operator delete(void *p) throw()
+void TR_IPBytecodeHashTableEntry::operator delete(void *p) noexcept
    {
    TR_IProfiler::allocator()->deallocate(p);
    }
@@ -2839,7 +2839,7 @@ TR_IPBCDataCallGraph::getData(TR::Compilation *comp)
    }
 
 void *
-TR_IPMethodHashTableEntry::operator new (size_t size) throw()
+TR_IPMethodHashTableEntry::operator new (size_t size) noexcept
    {
    memoryConsumed += (int32_t)size;
    return TR_IProfiler::allocator()->allocate(size, std::nothrow);
@@ -4418,7 +4418,7 @@ void printCsInfo(CallSiteProfileInfo& csInfo, TR::Compilation* comp, void* tag =
 
 //
 void *
-TR_IPHashedCallSite::operator new (size_t size) throw()
+TR_IPHashedCallSite::operator new (size_t size) noexcept
    {
    memoryConsumed += (int32_t)size;
    return TR_IProfiler::allocator()->allocate(size, std::nothrow);

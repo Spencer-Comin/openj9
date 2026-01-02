@@ -3646,7 +3646,7 @@ TR_SPMDKernelParallelizer::perform()
    }
 
 const char *
-TR_SPMDKernelParallelizer::optDetailString() const throw()
+TR_SPMDKernelParallelizer::optDetailString() const noexcept
    {
    return "O^O SPMD KERNEL PARALLELIZER: ";
    }

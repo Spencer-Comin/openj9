@@ -94,7 +94,7 @@ void *operator new(size_t size)
    return malloc(size);
    }
 
-// Avoid -Wimplicit-exception-spec-mismatch error on platforms that specify the global delete operator with throw()
+// Avoid -Wimplicit-exception-spec-mismatch error on platforms that specify the global delete operator with noexcept
 #ifndef _NOEXCEPT
 #define _NOEXCEPT
 #endif

@@ -47,7 +47,7 @@ class TR_SPMDKernelParallelizer : public TR_LoopTransformer
       }
 
    virtual int32_t perform();
-   virtual const char * optDetailString() const throw();
+   virtual const char * optDetailString() const noexcept;
 
    struct TR_SPMDKernelInfo
       {
@@ -106,7 +106,7 @@ class TR_SPMDKernelParallelizer : public TR_LoopTransformer
       //   int32_t _waysOfSIMD;
       };
 
-   enum TR_SPMDScopeInfoType 
+   enum TR_SPMDScopeInfoType
       {
       scopeSingleKernel = 0,
       scopeNaturalLoop = 1
@@ -120,7 +120,7 @@ class TR_SPMDKernelParallelizer : public TR_LoopTransformer
       TR_SPMDScopeInfo(TR::Compilation *comp, TR_RegionStructure *loop, TR_SPMDScopeInfoType scopeType)
          : _scopeType(scopeType), _loop(loop), _envelopeLoopTransformed(false), _coldLoops(comp->trMemory()), _exitRegionLocations(comp->trMemory())
          {
-         if (scopeType == scopeNaturalLoop) 
+         if (scopeType == scopeNaturalLoop)
             {
             _kernels =  new (comp->trHeapMemory()) List<TR_RegionStructure>(comp->trMemory());
             _flushGPUBlocks = new (comp->trHeapMemory()) TR_BitVector(comp->getFlowGraph()->getNextNodeNumber(), comp->trMemory(), stackAlloc, growable);
@@ -132,9 +132,9 @@ class TR_SPMDKernelParallelizer : public TR_LoopTransformer
          return &_exitRegionLocations;
          }
 
-      TR_RegionStructure* getSingleKernelRegion() 
+      TR_RegionStructure* getSingleKernelRegion()
          {
-         TR_ASSERT(_scopeType == scopeSingleKernel,"getSingleKernelRegion() called when GPU scope is not a single kernel");   
+         TR_ASSERT(_scopeType == scopeSingleKernel,"getSingleKernelRegion() called when GPU scope is not a single kernel");
          return _loop;
          }
 
@@ -143,43 +143,43 @@ class TR_SPMDKernelParallelizer : public TR_LoopTransformer
          TR_ASSERT(_scopeType == scopeNaturalLoop,"getEnvelopingLoop() called when GPU scope is not a natural loop");
          return _loop;
          }
-      
+
       void setKernelList(List<TR_RegionStructure> &gpuKernels)
          {
          TR_ASSERT(_scopeType == scopeNaturalLoop,"setKernelList() called when GPU scope is not a natural loop");
          _kernels->deleteAll();
          _kernels->add(gpuKernels);
          }
-      
-      List<TR_RegionStructure>* getKernelList() 
-         { 
-         TR_ASSERT(_scopeType == scopeNaturalLoop,"getKernelList() called when GPU scope is not a natural loop"); 
-         return _kernels; 
-         }       
-     
-      List<TR_RegionStructure>* getColdLoops() 
-         { 
-         TR_ASSERT(_scopeType == scopeNaturalLoop,"getColdLoops() called when GPU scope is not a natural loop"); 
-         return &_coldLoops; 
-         }       
-       
-      TR_BitVector* getFlushGPUBlocks() 
-         { 
-         TR_ASSERT(_scopeType == scopeNaturalLoop,"getFlushGPUBlocks() called when GPU scope is not a natural loop"); 
-         return _flushGPUBlocks; 
-         }       
+
+      List<TR_RegionStructure>* getKernelList()
+         {
+         TR_ASSERT(_scopeType == scopeNaturalLoop,"getKernelList() called when GPU scope is not a natural loop");
+         return _kernels;
+         }
+
+      List<TR_RegionStructure>* getColdLoops()
+         {
+         TR_ASSERT(_scopeType == scopeNaturalLoop,"getColdLoops() called when GPU scope is not a natural loop");
+         return &_coldLoops;
+         }
+
+      TR_BitVector* getFlushGPUBlocks()
+         {
+         TR_ASSERT(_scopeType == scopeNaturalLoop,"getFlushGPUBlocks() called when GPU scope is not a natural loop");
+         return _flushGPUBlocks;
+         }
 
 
       TR_SPMDScopeInfoType getScopeType() { return _scopeType; }
-      
+
       TR::SymbolReference *_scopeSymRef;
       TR::SymbolReference *_liveSymRef;
       bool _envelopeLoopTransformed;
 
       private:
-      
+
       TR_RegionStructure       *_loop;
-      TR_SPMDScopeInfoType     _scopeType; 
+      TR_SPMDScopeInfoType     _scopeType;
       List<TR_RegionStructure> *_kernels;
       List<TR_RegionStructure>  _coldLoops;
       TR_BitVector             *_flushGPUBlocks;

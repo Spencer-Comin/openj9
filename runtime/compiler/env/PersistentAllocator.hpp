@@ -52,11 +52,11 @@ class PersistentAllocator
    {
 public:
    PersistentAllocator(const PersistentAllocatorKit &creationKit);
-   ~PersistentAllocator() throw();
+   ~PersistentAllocator() noexcept;
 
-   void *allocate(size_t size, const std::nothrow_t tag, void * hint = 0) throw();
+   void *allocate(size_t size, const std::nothrow_t tag, void * hint = 0) noexcept;
    void *allocate(size_t size, void * hint = 0);
-   void deallocate(void * p, size_t sizeHint = 0) throw();
+   void deallocate(void * p, size_t sizeHint = 0) noexcept;
 
    friend bool operator ==(const PersistentAllocator &left, const PersistentAllocator &right)
       {
@@ -125,8 +125,8 @@ private:
 
    J9MemorySegment * findUsableSegment(size_t requiredSize);
 
-   static void * allocate(J9MemorySegment &memorySegment, size_t size) throw();
-   static size_t remainingSpace(J9MemorySegment &memorySegment) throw();
+   static void * allocate(J9MemorySegment &memorySegment, size_t size) noexcept;
+   static size_t remainingSpace(J9MemorySegment &memorySegment) noexcept;
 
    size_t const _minimumSegmentSize;
    SegmentAllocator _segmentAllocator;
@@ -200,8 +200,8 @@ private:
 
 void *operator new(size_t, J9::PersistentAllocator &);
 void *operator new[](size_t, J9::PersistentAllocator &);
-void operator delete(void *, J9::PersistentAllocator &) throw();
-void operator delete[](void *, J9::PersistentAllocator &) throw();
+void operator delete(void *, J9::PersistentAllocator &) noexcept;
+void operator delete[](void *, J9::PersistentAllocator &) noexcept;
 
 #endif // J9_PERSISTENT_ALLOCATOR_HPP
 

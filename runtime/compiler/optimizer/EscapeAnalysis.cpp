@@ -440,7 +440,7 @@ int32_t TR_EscapeAnalysis::perform()
    }
 
 const char *
-TR_EscapeAnalysis::optDetailString() const throw()
+TR_EscapeAnalysis::optDetailString() const noexcept
    {
    return "O^O ESCAPE ANALYSIS: ";
    }

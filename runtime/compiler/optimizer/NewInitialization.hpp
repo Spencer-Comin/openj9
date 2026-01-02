@@ -154,7 +154,7 @@ class TR_LocalNewInitialization : public TR_NewInitialization
       }
 
    virtual int32_t perform();
-   virtual const char * optDetailString() const throw();
+   virtual const char * optDetailString() const noexcept;
    virtual int32_t getValueNumber(TR::Node *n);
    };
 

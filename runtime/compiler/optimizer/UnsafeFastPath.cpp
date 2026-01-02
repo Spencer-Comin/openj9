@@ -1070,7 +1070,7 @@ int32_t TR_UnsafeFastPath::perform()
    }
 
 const char *
-TR_UnsafeFastPath::optDetailString() const throw()
+TR_UnsafeFastPath::optDetailString() const noexcept
    {
    return "O^O UNSAFE FAST PATH: ";
    }

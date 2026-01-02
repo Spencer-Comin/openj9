@@ -21,7 +21,7 @@
  *******************************************************************************/
 
 #ifndef VARHANDLETRANSFORMER_INCL
-#define VARHANDLETRANSFORMER_INCL 
+#define VARHANDLETRANSFORMER_INCL
 
 #include <stdint.h>
 #include "il/Node.hpp"
@@ -42,6 +42,6 @@ class TR_VarHandleTransformer : public TR::Optimization
 
    TR::RecognizedMethod getVarHandleAccessMethod(TR::Node* node);
    virtual int32_t perform();
-   virtual const char * optDetailString() const throw();
+   virtual const char * optDetailString() const noexcept;
    };
 #endif

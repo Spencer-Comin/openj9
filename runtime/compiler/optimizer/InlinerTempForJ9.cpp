@@ -3379,7 +3379,7 @@ int32_t TR_Inliner::perform()
    }
 
 const char *
-TR_Inliner::optDetailString() const throw()
+TR_Inliner::optDetailString() const noexcept
    {
    return "O^O INLINER: ";
    }

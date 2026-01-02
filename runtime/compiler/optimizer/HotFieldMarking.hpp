@@ -45,12 +45,12 @@ class TR_HotFieldMarking : public TR::Optimization
     * @return 1 on success, 0 on failure or if hot field marking is disabled
     */
    virtual int32_t perform();
-   
+
    /**
     * @brief Returns optimization string details
     */
-   virtual const char * optDetailString() const throw();
-   
+   virtual const char * optDetailString() const noexcept;
+
    /**
     * @brief Return the hot field marking pass scaling factor based on the opt level of the current compilation
     * @return Scaling factors can be overriden by environment variables; default scaling factors of 1 for opt level warm and below, 10 for opt level hot or very hot, and 100 for opt level scorching

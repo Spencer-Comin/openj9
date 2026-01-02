@@ -31,7 +31,7 @@
 #include "ras/Logger.hpp"
 
 const char *
-TR::TreeLowering::optDetailString() const throw()
+TR::TreeLowering::optDetailString() const noexcept
    {
    return "O^O TREE LOWERING: ";
    }

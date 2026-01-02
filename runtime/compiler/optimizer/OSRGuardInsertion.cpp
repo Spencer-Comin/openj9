@@ -282,7 +282,7 @@ int32_t TR_OSRGuardInsertion::perform()
    }
 
 const char *
-TR_OSRGuardInsertion::optDetailString() const throw()
+TR_OSRGuardInsertion::optDetailString() const noexcept
    {
    return "O^O OSR GUARD INS: ";
    }

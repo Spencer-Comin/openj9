@@ -95,7 +95,7 @@ int32_t TR_RecompilationModifier::perform()
    }
 
 const char *
-TR_RecompilationModifier::optDetailString() const throw()
+TR_RecompilationModifier::optDetailString() const noexcept
    {
    return "O^O RECOMPILATION COUNTERS: ";
    }

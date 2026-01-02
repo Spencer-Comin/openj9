@@ -48,7 +48,7 @@ class TR_JitProfiler : public TR::Optimization
       }
 
    virtual int32_t perform();
-   virtual const char * optDetailString() const throw();
+   virtual const char * optDetailString() const noexcept;
 
    enum ProfilingBlocksBypassBranchFlag { addProfilingBypass, addInlineProfilingTrees };
 
@@ -60,7 +60,7 @@ class TR_JitProfiler : public TR::Optimization
    void       addInstanceProfiling(TR::Node *instanceNode, TR::TreeTop *tt, TR::Block *currentBlock, ProfilingBlocksBypassBranchFlag addBypassBranch);
    void       addCallProfiling(TR::Node *callNode, TR::TreeTop *tt, TR::Block *currentBlock, ProfilingBlocksBypassBranchFlag addBypassBranch);
 
- 
+
    TR::CFG           *_cfg;
    TR::TreeTop       *_lastTreeTop;
    TR::NodeChecklist *_checklist;

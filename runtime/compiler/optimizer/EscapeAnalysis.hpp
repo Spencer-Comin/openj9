@@ -505,7 +505,7 @@ class TR_EscapeAnalysis : public TR::Optimization
       }
 
    virtual int32_t perform();
-   virtual const char * optDetailString() const throw();
+   virtual const char * optDetailString() const noexcept;
 
    /**
     * Indicates whether stack allocation of \c newvalue operations may be

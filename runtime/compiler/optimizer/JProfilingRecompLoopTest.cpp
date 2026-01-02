@@ -251,7 +251,7 @@ TR_JProfilingRecompLoopTest::addRecompilationTests(TR::Compilation *comp, Recomp
    }
 
 const char *
-TR_JProfilingRecompLoopTest::optDetailString() const throw()
+TR_JProfilingRecompLoopTest::optDetailString() const noexcept
    {
    return "O^O JPROFILER RECOMP TEST: ";
    }

@@ -58,7 +58,7 @@ class TR_PreEscapeAnalysis : public TR::Optimization
       }
 
    virtual int32_t perform();
-   virtual const char * optDetailString() const throw();
+   virtual const char * optDetailString() const noexcept;
    };
 
 #endif

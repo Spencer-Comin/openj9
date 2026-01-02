@@ -40,7 +40,7 @@ public:
       }
 
    virtual int32_t perform();
-   virtual const char * optDetailString() const throw();
+   virtual const char * optDetailString() const noexcept;
 
 private:
    void findGCPointInBlock(TR::Block *block, TR_BitVector &localsToBeInitialized);
@@ -57,7 +57,7 @@ public:
       }
 
    virtual int32_t perform();
-   virtual const char * optDetailString() const throw();
+   virtual const char * optDetailString() const noexcept;
 
    };
 

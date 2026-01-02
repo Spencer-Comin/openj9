@@ -442,7 +442,7 @@ private:
       TR::Compilation * compiler,
       volatile bool & haveLockedClassUnloadMonitor,
       const char *exceptionName
-      ) throw();
+      ) noexcept;
 
    void processExceptionCommonTasks(
       J9VMThread *vmThread,

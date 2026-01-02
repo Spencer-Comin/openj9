@@ -254,7 +254,7 @@ int32_t TR_ProfileGenerator::perform()
    }
 
 const char *
-TR_ProfileGenerator::optDetailString() const throw()
+TR_ProfileGenerator::optDetailString() const noexcept
    {
    return "O^O PROFILE GENERATOR: ";
    }

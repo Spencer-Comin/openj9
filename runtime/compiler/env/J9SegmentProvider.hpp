@@ -38,7 +38,7 @@ class J9SegmentProvider
    {
 public:
    virtual J9MemorySegment& request(size_t requiredSize) = 0;
-   virtual void release(J9MemorySegment& segment) throw() = 0;
+   virtual void release(J9MemorySegment& segment) noexcept = 0;
    virtual size_t getPreferredSegmentSize() { return 0; }
 
 protected:
@@ -48,14 +48,14 @@ protected:
    /*
     * Require knowledge of the concrete class in order to destroy SegmentProviders
     */
-   virtual ~J9SegmentProvider() throw();
+   virtual ~J9SegmentProvider() noexcept;
    };
 
 } // namespace J9
 
-void *operator new(size_t, J9MemorySegment &) throw();
-void *operator new[](size_t, J9MemorySegment &) throw();
-void operator delete(void *, J9MemorySegment &) throw();
-void operator delete[](void *, J9MemorySegment &) throw();
+void *operator new(size_t, J9MemorySegment &) noexcept;
+void *operator new[](size_t, J9MemorySegment &) noexcept;
+void operator delete(void *, J9MemorySegment &) noexcept;
+void operator delete[](void *, J9MemorySegment &) noexcept;
 
 #endif // J9_SEGMENT_PROVIDER

@@ -108,7 +108,7 @@ class TR_StaticFinalFieldFolding : public TR::Optimization
       return new (manager->allocator()) TR_StaticFinalFieldFolding(manager);
       }
    virtual int32_t perform();
-   virtual const char * optDetailString() const throw();
+   virtual const char * optDetailString() const noexcept;
 
    };
 #endif

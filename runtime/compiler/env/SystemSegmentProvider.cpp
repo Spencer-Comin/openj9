@@ -59,7 +59,7 @@ J9::SystemSegmentProvider::SystemSegmentProvider(size_t defaultSegmentSize, size
    _systemBytesAllocated += _systemSegmentSize;
    }
 
-J9::SystemSegmentProvider::~SystemSegmentProvider() throw()
+J9::SystemSegmentProvider::~SystemSegmentProvider() noexcept
    {
    while (!_systemSegments.empty())
       {
@@ -155,7 +155,7 @@ J9::SystemSegmentProvider::request(size_t requiredSize)
    }
 
 void
-J9::SystemSegmentProvider::release(TR::MemorySegment & segment) throw()
+J9::SystemSegmentProvider::release(TR::MemorySegment & segment) noexcept
    {
    size_t const segmentSize = segment.size();
 
@@ -214,19 +214,19 @@ J9::SystemSegmentProvider::release(TR::MemorySegment & segment) throw()
    }
 
 size_t
-J9::SystemSegmentProvider::systemBytesAllocated() const throw()
+J9::SystemSegmentProvider::systemBytesAllocated() const noexcept
    {
    return _systemBytesAllocated;
    }
 
 size_t
-J9::SystemSegmentProvider::regionBytesAllocated() const throw()
+J9::SystemSegmentProvider::regionBytesAllocated() const noexcept
    {
    return _regionBytesAllocated;
    }
 
 size_t
-J9::SystemSegmentProvider::bytesAllocated() const throw()
+J9::SystemSegmentProvider::bytesAllocated() const noexcept
    {
    return _regionBytesAllocated;
    }
@@ -260,7 +260,7 @@ J9::SystemSegmentProvider::createSegmentFromArea(size_t size, void *newSegmentAr
    }
 
 size_t
-J9::SystemSegmentProvider::allocationLimit() const throw()
+J9::SystemSegmentProvider::allocationLimit() const noexcept
    {
    return _allocationLimit;
    }

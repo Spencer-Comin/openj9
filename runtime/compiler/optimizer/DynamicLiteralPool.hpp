@@ -52,7 +52,7 @@ class TR_DynamicLiteralPool : public TR::Optimization
 
    virtual int32_t perform();
    virtual int32_t performOnBlock(TR::Block *);
-   virtual const char * optDetailString() const throw();
+   virtual const char * optDetailString() const noexcept;
 
    int32_t process(TR::TreeTop *, TR::TreeTop *);
 

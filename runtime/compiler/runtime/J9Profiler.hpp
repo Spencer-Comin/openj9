@@ -269,7 +269,7 @@ class TR_RecompilationModifier : public TR::Optimization
       }
 
    virtual int32_t perform();
-   virtual const char * optDetailString() const throw();
+   virtual const char * optDetailString() const noexcept;
 
    TR::Recompilation *_recompilation;
    };

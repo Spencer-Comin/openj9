@@ -65,7 +65,7 @@ public:
       {
       }
 
-   void * allocate(size_t size, const std::nothrow_t& tag, void * hint = 0) throw()
+   void * allocate(size_t size, const std::nothrow_t& tag, void * hint = 0) noexcept
       {
       PORT_ACCESS_FROM_JAVAVM(_javaVM);
       return j9mem_allocate_memory(size, J9MEM_CATEGORY_JIT);
@@ -78,7 +78,7 @@ public:
       return allocated;
       }
 
-   void deallocate(void * p, size_t size = 0) throw()
+   void deallocate(void * p, size_t size = 0) noexcept
       {
       PORT_ACCESS_FROM_JAVAVM(_javaVM);
       j9mem_free_memory(p);
@@ -115,7 +115,7 @@ inline void * operator new(size_t size, J9::RawAllocator allocator)
    return allocator.allocate(size);
    }
 
-inline void operator delete(void *ptr, J9::RawAllocator allocator) throw()
+inline void operator delete(void *ptr, J9::RawAllocator allocator) noexcept
    {
    allocator.deallocate(ptr);
    }
@@ -125,17 +125,17 @@ inline void * operator new[](size_t size, J9::RawAllocator allocator)
    return allocator.allocate(size);
    }
 
-inline void operator delete[](void *ptr, J9::RawAllocator allocator) throw()
+inline void operator delete[](void *ptr, J9::RawAllocator allocator) noexcept
    {
    allocator.deallocate(ptr);
    }
 
-inline void * operator new(size_t size, J9::RawAllocator allocator, const std::nothrow_t& tag) throw()
+inline void * operator new(size_t size, J9::RawAllocator allocator, const std::nothrow_t& tag) noexcept
    {
    return allocator.allocate(size, tag);
    }
 
-inline void * operator new[](size_t size, J9::RawAllocator allocator, const std::nothrow_t& tag) throw()
+inline void * operator new[](size_t size, J9::RawAllocator allocator, const std::nothrow_t& tag) noexcept
    {
    return allocator.allocate(size, tag);
    }

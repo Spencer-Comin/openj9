@@ -3339,7 +3339,7 @@ int32_t TR_CISCTransformer::perform()
    }
 
 const char *
-TR_CISCTransformer::optDetailString() const throw()
+TR_CISCTransformer::optDetailString() const noexcept
    {
    return "O^O IDIOM RECOGNITION: ";
    }

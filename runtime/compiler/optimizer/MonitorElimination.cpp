@@ -478,7 +478,7 @@ int32_t TR::MonitorElimination::perform()
    }
 
 const char *
-TR::MonitorElimination::optDetailString() const throw()
+TR::MonitorElimination::optDetailString() const noexcept
    {
    return "O^O MONITOR ELIMINATION: ";
    }

@@ -47,7 +47,7 @@ class TR_SignExtendLoads : public TR::Optimization
       }
 
    virtual int32_t perform();
-   virtual const char * optDetailString() const throw();
+   virtual const char * optDetailString() const noexcept;
 
    private:
    bool gatheri2lNodes(TR::Node* parent,TR::Node *node, TR_ScratchList<TR::Node> & i2lList,

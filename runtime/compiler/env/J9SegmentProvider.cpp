@@ -31,12 +31,12 @@ J9::J9SegmentProvider::J9SegmentProvider(const J9::J9SegmentProvider &other)
    {
    }
 
-J9::J9SegmentProvider::~J9SegmentProvider() throw()
+J9::J9SegmentProvider::~J9SegmentProvider() noexcept
    {
    }
 
 void *
-operator new(size_t size, J9MemorySegment &segment) throw()
+operator new(size_t size, J9MemorySegment &segment) noexcept
    {
    size = (size + 15) & ~static_cast<size_t>(15);
    if (segment.heapAlloc + size > segment.heapTop) return NULL;
@@ -45,16 +45,16 @@ operator new(size_t size, J9MemorySegment &segment) throw()
    return alloc;
    }
 
-void *operator new[](size_t size, J9MemorySegment &segment) throw()
+void *operator new[](size_t size, J9MemorySegment &segment) noexcept
    {
    return operator new(size, segment);
    }
 
-void operator delete(void *, J9MemorySegment &) throw()
+void operator delete(void *, J9MemorySegment &) noexcept
    {
    }
 
-void operator delete[](void *ptr, J9MemorySegment &segment) throw()
+void operator delete[](void *ptr, J9MemorySegment &segment) noexcept
    {
    operator delete(ptr, segment);
    }

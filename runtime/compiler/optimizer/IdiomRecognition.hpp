@@ -1297,7 +1297,7 @@ class TR_CISCTransformer : public TR_LoopTransformer
    void restoreBitsKeepAliveCalls();
 
    virtual int32_t perform();
-   virtual const char * optDetailString() const throw();
+   virtual const char * optDetailString() const noexcept;
 
    bool createLoopCandidates(List<TR_RegionStructure> *ret);
    TR::Block * findPredecessorBlockOfLoopEntry(TR_RegionStructure *loop);

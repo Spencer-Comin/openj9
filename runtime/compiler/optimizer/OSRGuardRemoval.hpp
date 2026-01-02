@@ -41,7 +41,7 @@ class TR_OSRGuardRemoval : public TR::Optimization
       }
 
    virtual int32_t perform();
-   virtual const char *optDetailString() const throw();
+   virtual const char *optDetailString() const noexcept;
    static bool findMatchingOSRGuard(TR::Compilation *comp, TR::TreeTop *tt);
    };
 #endif

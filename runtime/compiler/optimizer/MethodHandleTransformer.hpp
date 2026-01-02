@@ -73,7 +73,7 @@ class TR_MethodHandleTransformer : public TR::Optimization
       }
 
    virtual int32_t perform();
-   virtual const char * optDetailString() const throw();
+   virtual const char * optDetailString() const noexcept;
 
    typedef TR::typed_allocator<TR::KnownObjectTable::Index, TR::Region &> ObjectInfoAllocator;
    typedef std::vector<TR::KnownObjectTable::Index, ObjectInfoAllocator> ObjectInfo;

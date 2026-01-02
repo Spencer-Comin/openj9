@@ -90,7 +90,7 @@ int32_t TR_PostEscapeAnalysis::perform()
    }
 
 const char *
-TR_PostEscapeAnalysis::optDetailString() const throw()
+TR_PostEscapeAnalysis::optDetailString() const noexcept
    {
    return "O^O POST ESCAPE ANALYSIS: ";
    }

@@ -37,7 +37,7 @@ namespace J9 {
  */
 class DataCacheError : public virtual std::bad_alloc
    {
-   virtual const char* what() const throw() { return "Data Cache Error"; }
+   virtual const char* what() const noexcept { return "Data Cache Error"; }
    };
 
 /**
@@ -48,7 +48,7 @@ class DataCacheError : public virtual std::bad_alloc
  */
 class RecoverableDataCacheError : public virtual std::bad_alloc
    {
-   virtual const char* what() const throw() { return "Recoverable Data Cache Error"; }
+   virtual const char* what() const noexcept { return "Recoverable Data Cache Error"; }
    };
 }
 

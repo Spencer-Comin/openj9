@@ -36,7 +36,7 @@ namespace J9 {
  */
 class LowPhysicalMemory : public virtual std::bad_alloc
    {
-   virtual const char* what() const throw() { return "Low Physical Memory"; }
+   virtual const char* what() const noexcept { return "Low Physical Memory"; }
    };
 
 }

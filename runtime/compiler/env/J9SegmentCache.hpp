@@ -36,10 +36,10 @@ public:
    J9SegmentCache(size_t cachedSegmentSize, J9SegmentProvider &backingProvider);
    J9SegmentCache(J9SegmentCache &donor);
 
-   ~J9SegmentCache() throw();
+   ~J9SegmentCache() noexcept;
 
    virtual J9MemorySegment& request(size_t requiredSize);
-   virtual void release(J9MemorySegment& segment) throw();
+   virtual void release(J9MemorySegment& segment) noexcept;
    virtual size_t getPreferredSegmentSize() { return _cachedSegmentSize; }
 
    J9SegmentCache &ref() { return *this; }

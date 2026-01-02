@@ -175,7 +175,7 @@ class TR_StringBuilderTransformer : public TR::Optimization
     */
    virtual int32_t performOnBlock(TR::Block* block);
 
-   virtual const char * optDetailString() const throw()
+   virtual const char * optDetailString() const noexcept
       {
       return "O^O STRINGBUILDER TRANSFORMER: ";
       }

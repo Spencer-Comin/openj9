@@ -42,7 +42,7 @@ class TR_JProfilingValue : public TR::Optimization
       }
 
    virtual int32_t perform();
-   virtual const char *optDetailString() const throw();
+   virtual const char *optDetailString() const noexcept;
 
    /**
     * Identify place holder calls to jProfileValueSymbol and jProfileValueWithNullCHKSymbol, lowering them

@@ -42,7 +42,7 @@ class TR_OSRGuardInsertion : public TR::Optimization
       }
 
    virtual int32_t perform();
-   virtual const char * optDetailString() const throw();
+   virtual const char * optDetailString() const noexcept;
 
    private:
    static const uint32_t defaultRematBlockLimit = 3;

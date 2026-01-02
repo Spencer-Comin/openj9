@@ -148,7 +148,7 @@ int32_t TR_OSRGuardRemoval::perform()
    }
 
 const char *
-TR_OSRGuardRemoval::optDetailString() const throw()
+TR_OSRGuardRemoval::optDetailString() const noexcept
    {
    return "O^O OSR GUARD REMOVAL: ";
    }

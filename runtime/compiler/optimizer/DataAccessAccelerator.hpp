@@ -201,7 +201,7 @@ class TR_DataAccessAccelerator : public TR::Optimization
     */
    virtual int32_t processVariableCalls(TreeTopContainer* variableCallTreeTops);
 
-   virtual const char * optDetailString() const throw();
+   virtual const char * optDetailString() const noexcept;
 
    bool isChildConst (TR::Node* node, int32_t child);
 

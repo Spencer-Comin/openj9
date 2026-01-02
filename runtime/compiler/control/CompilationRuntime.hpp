@@ -694,7 +694,7 @@ public:
    static void disableAOTCompilations();
 #endif
 
-   void * operator new(size_t s, void * p) throw() { return p; }
+   void * operator new(size_t s, void * p) noexcept { return p; }
    void operator delete (void *, void * p) {}
    CompilationInfo (J9JITConfig *jitConfig);
    TR::Monitor *getCompilationMonitor() {return _compilationMonitor;}

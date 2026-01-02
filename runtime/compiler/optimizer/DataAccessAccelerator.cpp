@@ -194,7 +194,7 @@ TR_DataAccessAccelerator::processVariableCalls(TreeTopContainer* variableCallTre
    }
 
 const char *
-TR_DataAccessAccelerator::optDetailString() const throw()
+TR_DataAccessAccelerator::optDetailString() const noexcept
    {
    return "O^O DATA ACCESS ACCELERATOR: ";
    }

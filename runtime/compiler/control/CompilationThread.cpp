@@ -9840,7 +9840,7 @@ TR::CompilationInfoPerThreadBase::compile(
                   log->prints(">\n");
                   }
                }
-            ~CompilationTrace() throw()
+            ~CompilationTrace() noexcept
                {
                if (_compiler.getOption(TR_TraceAll))
                   (&_compiler)->log()->prints("</compile>\n\n");
@@ -11378,7 +11378,7 @@ TR::CompilationInfoPerThreadBase::processException(
    TR::Compilation * compiler,
    volatile bool & haveLockedClassUnloadMonitor,
    const char *exceptionName
-   ) throw()
+   ) noexcept
    {
    if (TR::Options::getVerboseOption(TR_VerboseCompilationDispatch))
       {

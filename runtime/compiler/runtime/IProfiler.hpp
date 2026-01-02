@@ -106,8 +106,8 @@ extern "C" __declspec(dllimport) void __stdcall DebugBreak();
 
 struct TR_IPHashedCallSite
    {
-   void * operator new (size_t size) throw();
-   void operator delete(void *p) throw() {}
+   void * operator new (size_t size) noexcept;
+   void operator delete(void *p) noexcept {}
    //
    TR_IPHashedCallSite () : _method(NULL), _offset(0) {};
    TR_IPHashedCallSite (J9Method* method, uint32_t offset) : _method(method), _offset(offset) {};
@@ -204,8 +204,8 @@ enum TR_EntryStatusInfo
 class TR_IPBytecodeHashTableEntry
    {
 public:
-   void * operator new (size_t size) throw();
-   void operator delete(void *p) throw();
+   void * operator new (size_t size) noexcept;
+   void operator delete(void *p) noexcept;
    void * operator new (size_t size, void * placement) {return placement;}
    void operator delete(void *p, void *) {}
 
@@ -330,8 +330,8 @@ struct TR_IPMethodHashTableEntry
    {
    static const int32_t MAX_IPMETHOD_CALLERS = 20;
    public:
-   void * operator new (size_t size) throw();
-   void operator delete(void *p) throw() {}
+   void * operator new (size_t size) noexcept;
+   void operator delete(void *p) noexcept {}
 
    TR_IPMethodHashTableEntry *_next;   // for chaining in the hashtable
    TR_OpaqueMethodBlock      *_method; // callee
@@ -693,8 +693,8 @@ public:
    uintptr_t getReceiverClassFromCGProfilingData(TR_ByteCodeInfo &bcInfo, TR::Compilation *comp);
 
    TR_IProfiler (J9JITConfig *);
-   void * operator new (size_t) throw();
-   void operator delete(void *p) throw() {}
+   void * operator new (size_t) noexcept;
+   void operator delete(void *p) noexcept {}
    void shutdown();
    void outputStats();
    void dumpIPBCDataCallGraph(J9VMThread* currentThread);

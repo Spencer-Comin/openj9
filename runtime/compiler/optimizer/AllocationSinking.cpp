@@ -170,7 +170,7 @@ int32_t TR_AllocationSinking::perform()
    }
 
 const char *
-TR_AllocationSinking::optDetailString() const throw()
+TR_AllocationSinking::optDetailString() const noexcept
    {
    return "O^O ALLOCATION SINKING: ";
    }

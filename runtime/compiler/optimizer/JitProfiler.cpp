@@ -121,7 +121,7 @@ int32_t TR_JitProfiler::perform()
    }
 
 const char *
-TR_JitProfiler::optDetailString() const throw()
+TR_JitProfiler::optDetailString() const noexcept
    {
    return "O^O SAMPLING JPROFILER: ";
    }

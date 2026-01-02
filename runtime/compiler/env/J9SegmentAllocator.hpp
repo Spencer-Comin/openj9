@@ -38,17 +38,17 @@ namespace J9 {
 class SegmentAllocator : public J9SegmentProvider
    {
 public:
-   SegmentAllocator(int32_t segmentType, J9JavaVM &javaVM) throw();
-   ~SegmentAllocator() throw();
+   SegmentAllocator(int32_t segmentType, J9JavaVM &javaVM) noexcept;
+   ~SegmentAllocator() noexcept;
    J9MemorySegment &allocate(const size_t segmentSize);
-   J9MemorySegment *allocate(const size_t segmentSize, const std::nothrow_t &tag) throw();
-   void deallocate(J9MemorySegment &unusedSegment) throw();
+   J9MemorySegment *allocate(const size_t segmentSize, const std::nothrow_t &tag) noexcept;
+   void deallocate(J9MemorySegment &unusedSegment) noexcept;
 
    J9MemorySegment &request(size_t segmentSize);
-   void release(J9MemorySegment &unusedSegment) throw();
+   void release(J9MemorySegment &unusedSegment) noexcept;
 
-   size_t pageSize() throw();
-   size_t pageAlign(const size_t requestedSize) throw();
+   size_t pageSize() noexcept;
+   size_t pageAlign(const size_t requestedSize) noexcept;
 
 private:
    void preventAllocationOfBTLMemory(J9MemorySegment * &segment, J9JavaVM * javaVM, int32_t segmentType);

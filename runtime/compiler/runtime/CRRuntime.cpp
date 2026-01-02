@@ -418,7 +418,7 @@ TR::CRRuntime::teardownEnvForProactiveCompilation(J9JavaVM *javaVM, J9VMThread *
  *            object as part leaving the scope, or stack unwinding, which
  *            will attempt to release the monitor in its destructor.
  */
-void TR::CRRuntime::releaseCompMonitorUntilNotifiedOnCRMonitor() throw()
+void TR::CRRuntime::releaseCompMonitorUntilNotifiedOnCRMonitor() noexcept
    {
    TR_ASSERT_FATAL(getCompilationMonitor()->owned_by_self(),
                    "releaseCompMonitorUntilNotifiedOnCRMonitor should not be called without the Comp Monitor!\n");

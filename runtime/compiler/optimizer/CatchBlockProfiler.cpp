@@ -83,7 +83,7 @@ int32_t TR::CatchBlockProfiler::perform()
    }
 
 const char *
-TR::CatchBlockProfiler::optDetailString() const throw()
+TR::CatchBlockProfiler::optDetailString() const noexcept
    {
    return "O^O CATCH BLOCK PROFILER: ";
    }
