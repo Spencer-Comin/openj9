@@ -1520,7 +1520,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    TR_OutlinedInstructions *outlinedHelperCall = new (cg->trHeapMemory()) TR_OutlinedInstructions(node, TR::acall, spinePtrReg, helperLabel, doneLabel, cg);
    cg->generateDebugCounter(
          outlinedHelperCall->getFirstInstruction(),
-         TR::DebugCounter::debugCounterName(comp, "helperCalls/%s/(%s)/%d/%d", node->getOpCode().getName(), comp->signature(), node->getByteCodeInfo().getCallerIndex(), node->getByteCodeInfo().getByteCodeIndex()),
+         TR::DebugCounter::debugCounterName(comp, "multianewarray/helper/(%s)/%d/%d", comp->signature(), node->getByteCodeInfo().getCallerIndex(), node->getByteCodeInfo().getByteCodeIndex()),
          1, TR::DebugCounter::Cheap);
    cg->getOutlinedInstructionsList().push_front(outlinedHelperCall);
 
@@ -1716,14 +1716,22 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    // decrement firstDim and leafPtr and loop back
    generateRegRegInstruction(TR::InstOpCode::SUB8RegReg, node, leafPtrReg, leafSizeReg, cg);
    generateRegInstruction(TR::InstOpCode::DEC8Reg, node, firstDimReg, cg);
-   generateLabelInstruction(TR::InstOpCode::JG4, node, loopLabel, cg);
+   TR::Instruction *inst = generateLabelInstruction(TR::InstOpCode::JG4, node, loopLabel, cg);
+   cg->generateDebugCounter(
+         inst,
+         TR::DebugCounter::debugCounterName(comp, "multianewarray/inline/(%s)/%d/%d", comp->signature(), node->getByteCodeInfo().getCallerIndex(), node->getByteCodeInfo().getByteCodeIndex()),
+         1, TR::DebugCounter::Cheap);
 
    // initialise zero length array
    TR_OutlinedInstructionsGenerator zeroLengthOOL(initZeroLengthLabel, node, cg);
 
    // init size and mustBeZero ('0') fields to 0
    generateMemImmInstruction(TR::InstOpCode::S4MemImm4, node, generateX86MemoryReference(spinePtrReg, fej9->getOffsetOfContiguousArraySizeField(), cg), 0, cg);
-   generateMemImmInstruction(TR::InstOpCode::S4MemImm4, node, generateX86MemoryReference(spinePtrReg, fej9->getOffsetOfDiscontiguousArraySizeField(), cg), 0, cg);
+   inst generateMemImmInstruction(TR::InstOpCode::S4MemImm4, node, generateX86MemoryReference(spinePtrReg, fej9->getOffsetOfDiscontiguousArraySizeField(), cg), 0, cg);
+   cg->generateDebugCounter(
+         inst,
+         TR::DebugCounter::debugCounterName(comp, "multianewarray/zero-size/(%s)/%d/%d", comp->signature(), node->getByteCodeInfo().getCallerIndex(), node->getByteCodeInfo().getByteCodeIndex()),
+         1, TR::DebugCounter::Cheap);
    generateLabelInstruction(TR::InstOpCode::JMP4, node, doneLabel, cg);
    zeroLengthOOL.endOutlinedInstructionSequence();
 
