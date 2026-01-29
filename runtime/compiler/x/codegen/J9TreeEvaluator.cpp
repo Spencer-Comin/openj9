@@ -1520,7 +1520,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    TR_OutlinedInstructions *outlinedHelperCall = new (cg->trHeapMemory()) TR_OutlinedInstructions(node, TR::acall, spinePtrReg, helperLabel, doneLabel, cg);
    cg->generateDebugCounter(
          outlinedHelperCall->getFirstInstruction(),
-         TR::DebugCounter::debugCounterName(comp, "multianewarray/helper/(%s)/%d/%d", comp->signature(), node->getByteCodeInfo().getCallerIndex(), node->getByteCodeInfo().getByteCodeIndex()),
+         TR::DebugCounter::debugCounterName(comp, "multianewarray/dynamic/general/helper/(%s)/%d/%d", comp->signature(), node->getByteCodeInfo().getCallerIndex(), node->getByteCodeInfo().getByteCodeIndex()),
          1, TR::DebugCounter::Cheap);
    cg->getOutlinedInstructionsList().push_front(outlinedHelperCall);
 
@@ -1719,7 +1719,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    TR::Instruction *inst = generateLabelInstruction(TR::InstOpCode::JG4, node, loopLabel, cg);
    cg->generateDebugCounter(
          inst,
-         TR::DebugCounter::debugCounterName(comp, "multianewarray/inline/(%s)/%d/%d", comp->signature(), node->getByteCodeInfo().getCallerIndex(), node->getByteCodeInfo().getByteCodeIndex()),
+         TR::DebugCounter::debugCounterName(comp, "multianewarray/dynamic/general/inline/(%s)/%d/%d", comp->signature(), node->getByteCodeInfo().getCallerIndex(), node->getByteCodeInfo().getByteCodeIndex()),
          1, TR::DebugCounter::Cheap);
 
    // initialise zero length array
@@ -1730,7 +1730,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
    inst = generateMemImmInstruction(TR::InstOpCode::S4MemImm4, node, generateX86MemoryReference(spinePtrReg, fej9->getOffsetOfDiscontiguousArraySizeField(), cg), 0, cg);
    cg->generateDebugCounter(
          inst,
-         TR::DebugCounter::debugCounterName(comp, "multianewarray/zero-size/(%s)/%d/%d", comp->signature(), node->getByteCodeInfo().getCallerIndex(), node->getByteCodeInfo().getByteCodeIndex()),
+         TR::DebugCounter::debugCounterName(comp, "multianewarray/dynamic/general/zero-size/(%s)/%d/%d", comp->signature(), node->getByteCodeInfo().getCallerIndex(), node->getByteCodeInfo().getByteCodeIndex()),
          1, TR::DebugCounter::Cheap);
    generateLabelInstruction(TR::InstOpCode::JMP4, node, doneLabel, cg);
    zeroLengthOOL.endOutlinedInstructionSequence();
@@ -1865,6 +1865,10 @@ static TR::Register * generate2DZeroLengthArrayWithInlineAllocators(TR::Node *no
 
    // Generate the heap allocation, and the snippet that will handle heap overflow.
    TR_OutlinedInstructions *outlinedHelperCall = new (cg->trHeapMemory()) TR_OutlinedInstructions(node, TR::acall, targetReg, oolFailLabel, doneLabel, cg);
+   cg->generateDebugCounter(
+         outlinedHelperCall->getFirstInstruction(),
+         TR::DebugCounter::debugCounterName(comp, "multianewarray/dynamic/zero-dim/helper/(%s)/%d/%d", comp->signature(), node->getByteCodeInfo().getCallerIndex(), node->getByteCodeInfo().getByteCodeIndex()),
+         1, TR::DebugCounter::Cheap);
    cg->getOutlinedInstructionsList().push_front(outlinedHelperCall);
 
    dimReg = cg->evaluate(secondChild);
@@ -1906,7 +1910,11 @@ static TR::Register * generate2DZeroLengthArrayWithInlineAllocators(TR::Node *no
 
    // Init size and mustBeZero ('0') fields to 0
    generateMemImmInstruction(TR::InstOpCode::S4MemImm4, node, generateX86MemoryReference(targetReg, fej9->getOffsetOfContiguousArraySizeField(), cg), 0, cg);
-   generateMemImmInstruction(TR::InstOpCode::S4MemImm4, node, generateX86MemoryReference(targetReg, fej9->getOffsetOfDiscontiguousArraySizeField(), cg), 0, cg);
+   TR::Instruction *inst = generateMemImmInstruction(TR::InstOpCode::S4MemImm4, node, generateX86MemoryReference(targetReg, fej9->getOffsetOfDiscontiguousArraySizeField(), cg), 0, cg);
+   cg->generateDebugCounter(
+      inst,
+      TR::DebugCounter::debugCounterName(comp, "multianewarray/dynamic/zero-dim/first/(%s)/%d/%d", comp->signature(), node->getByteCodeInfo().getCallerIndex(), node->getByteCodeInfo().getByteCodeIndex()),
+      1, TR::DebugCounter::Cheap);
 
 #if defined(J9VM_GC_SPARSE_HEAP_ALLOCATION)
    if (isOffHeapAllocationEnabled)
@@ -2026,7 +2034,11 @@ static TR::Register * generate2DZeroLengthArrayWithInlineAllocators(TR::Node *no
    generateRegImmInstruction(TR::InstOpCode::ADDRegImms(), node, temp1Reg, elementSize, cg);
 
    generateRegInstruction(TR::InstOpCode::DEC4Reg, node, firstDimLenReg, cg);
-   generateLabelInstruction(TR::InstOpCode::JA4, node, loopLabel, cg);
+   inst = generateLabelInstruction(TR::InstOpCode::JA4, node, loopLabel, cg);
+   cg->generateDebugCounter(
+      inst,
+      TR::DebugCounter::debugCounterName(comp, "multianewarray/dynamic/zero-dim/second/(%s)/%d/%d", comp->signature(), node->getByteCodeInfo().getCallerIndex(), node->getByteCodeInfo().getByteCodeIndex()),
+      1, TR::DebugCounter::Cheap);
 
    generateLabelInstruction(TR::InstOpCode::JMP4, node, doneLabel, cg);
 
@@ -2136,10 +2148,16 @@ TR::Register *J9::X86::TreeEvaluator::multianewArrayEvaluator(TR::Node *node, TR
 #endif /* defined(J9VM_GC_SPARSE_HEAP_ALLOCATION) */
       if (!disable && !isOffHeapAllocationEnabled && (leafArrayElementSize != -1) && !comp->getOptions()->realTimeGC())
          {
+         TR::DebugCounter::incStaticDebugCounter(comp,
+                  TR::DebugCounter::debugCounterName(comp, "multianewarray/static/general/(%s)/%d/%d",
+                     comp->signature(), node->getByteCodeInfo().getCallerIndex(), node->getByteCodeInfo().getByteCodeIndex()));
          return generate2DArrayWithInlineAllocators(node, cg, leafArrayElementSize);
          }
       else
          {
+         TR::DebugCounter::incStaticDebugCounter(comp,
+                  TR::DebugCounter::debugCounterName(comp, "multianewarray/static/zero-dim/(%s)/%d/%d",
+                     comp->signature(), node->getByteCodeInfo().getCallerIndex(), node->getByteCodeInfo().getByteCodeIndex()));
          return generate2DZeroLengthArrayWithInlineAllocators(node, cg);
          }
       }
