@@ -1727,7 +1727,7 @@ static TR::Register * generate2DArrayWithInlineAllocators(TR::Node *node, TR::Co
 
    // init size and mustBeZero ('0') fields to 0
    generateMemImmInstruction(TR::InstOpCode::S4MemImm4, node, generateX86MemoryReference(spinePtrReg, fej9->getOffsetOfContiguousArraySizeField(), cg), 0, cg);
-   inst generateMemImmInstruction(TR::InstOpCode::S4MemImm4, node, generateX86MemoryReference(spinePtrReg, fej9->getOffsetOfDiscontiguousArraySizeField(), cg), 0, cg);
+   inst = generateMemImmInstruction(TR::InstOpCode::S4MemImm4, node, generateX86MemoryReference(spinePtrReg, fej9->getOffsetOfDiscontiguousArraySizeField(), cg), 0, cg);
    cg->generateDebugCounter(
          inst,
          TR::DebugCounter::debugCounterName(comp, "multianewarray/zero-size/(%s)/%d/%d", comp->signature(), node->getByteCodeInfo().getCallerIndex(), node->getByteCodeInfo().getByteCodeIndex()),
