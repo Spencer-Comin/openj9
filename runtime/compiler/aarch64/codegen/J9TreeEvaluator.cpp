@@ -582,13 +582,26 @@ generateSoftwareReadBarrier(TR::Node *node, TR::CodeGenerator *cg, bool isArdbar
 
    generateLabelInstruction(cg, TR::InstOpCode::label, node, startLabel);
 
-   generateTrg1MemInstruction(cg, loadOp, node, evacuateReg,
-         TR::MemoryReference::createWithDisplacement(cg, vmThreadReg, comp->fej9()->thisThreadGetEvacuateBaseAddressOffset()));
+   bool canUseLDAR = !cg->comp()->getOption(TR_DisableLDARVolatile);
+   bool needSync = node->getSymbolReference()->getSymbol()->isAtLeastOrStrongerThanAcquireRelease() && comp->target().isSMP();
+   bool useLDAR = canUseLDAR && needSync;
+
+   if (useLDAR)
+      {
+      loadOp = isArdbari ? TR::InstOpCode::ldarx : TR::InstOpCode::ldarw;
+      }
+
+   TR::MemoryReference *mr = TR::MemoryReference::createWithDisplacement(cg, vmThreadReg, comp->fej9()->thisThreadGetEvacuateBaseAddressOffset());
+   if (useLDAR)
+     mr->simplify(node, cg);
+   generateTrg1MemInstruction(cg, loadOp, node, evacuateReg, mr);
    generateCompareInstruction(cg, node, tempReg, evacuateReg, isArdbari); // 64-bit compare in ardbari
    generateConditionalBranchInstruction(cg, node, endLabel, TR::CC_LT);
 
-   generateTrg1MemInstruction(cg, loadOp, node, evacuateReg,
-         TR::MemoryReference::createWithDisplacement(cg, vmThreadReg, comp->fej9()->thisThreadGetEvacuateTopAddressOffset()));
+   mr = TR::MemoryReference::createWithDisplacement(cg, vmThreadReg, comp->fej9()->thisThreadGetEvacuateTopAddressOffset());
+   if (useLDAR)
+     mr->simplify(node, cg);
+   generateTrg1MemInstruction(cg, loadOp, node, evacuateReg, mr);
    generateCompareInstruction(cg, node, tempReg, evacuateReg, isArdbari); // 64-bit compare in ardbari
    generateConditionalBranchInstruction(cg, node, endLabel, TR::CC_GT);
 
@@ -605,8 +618,7 @@ generateSoftwareReadBarrier(TR::Node *node, TR::CodeGenerator *cg, bool isArdbar
 
    generateLabelInstruction(cg, TR::InstOpCode::label, node, endLabel, deps);
 
-   if (node->getSymbolReference()->getSymbol()->isAtLeastOrStrongerThanAcquireRelease() &&
-       comp->target().isSMP())
+   if (needSync && !canUseLDAR)
       {
       // Issue an Acquire barrier after acquire load
       generateSynchronizationInstruction(cg, TR::InstOpCode::dmb, node, TR::InstOpCode::ishld);
@@ -1235,15 +1247,26 @@ J9::ARM64::TreeEvaluator::awrtbarEvaluator(TR::Node *node, TR::CodeGenerator *cg
 
    TR::MemoryReference *tempMR = TR::MemoryReference::createWithRootLoadOrStore(cg, node);
 
+   bool canUseSTLR = tempMR->getUnresolvedSnippet() == NULL && !cg->comp()->getOption(TR_DisableSTLRVolatile);
+
    // Issue a StoreStore barrier before each release store.
    if (node->getSymbolReference()->getSymbol()->isAtLeastOrStrongerThanAcquireRelease() &&
-       cg->comp()->target().isSMP())
+       cg->comp()->target().isSMP() && !canUseSTLR)
       generateSynchronizationInstruction(cg, TR::InstOpCode::dmb, node, TR::InstOpCode::ishst);
 
-   generateMemSrc1Instruction(cg, TR::InstOpCode::strimmx, node, tempMR, sourceRegister, NULL);
+   if (node->getSymbolReference()->getSymbol()->isAtLeastOrStrongerThanAcquireRelease() &&
+       cg->comp()->target().isSMP() && canUseSTLR)
+      {
+      tempMR->simplify(node, cg);
+      generateMemSrc1Instruction(cg, TR::InstOpCode::stlrx, node, tempMR, sourceRegister, NULL);
+      }
+   else
+      {
+      generateMemSrc1Instruction(cg, TR::InstOpCode::strimmx, node, tempMR, sourceRegister, NULL);
+      }
 
    // Issue a StoreLoad barrier after each volatile store.
-   if (node->getSymbolReference()->getSymbol()->isVolatile() && cg->comp()->target().isSMP())
+   if (node->getSymbolReference()->getSymbol()->isVolatile() && cg->comp()->target().isSMP() && !canUseSTLR)
       generateSynchronizationInstruction(cg, TR::InstOpCode::dmb, node, TR::InstOpCode::ish);
 
    wrtbarEvaluator(node, sourceRegister, destinationRegister, firstChild->isNonNull(), cg);
@@ -1301,15 +1324,25 @@ J9::ARM64::TreeEvaluator::awrtbariEvaluator(TR::Node *node, TR::CodeGenerator *c
 
    TR::MemoryReference *tempMR = TR::MemoryReference::createWithRootLoadOrStore(cg, node);
 
+   bool canUseSTLR = tempMR->getUnresolvedSnippet() == NULL && !cg->comp()->getOption(TR_DisableSTLRVolatile);
+
    // Issue a StoreStore barrier before each release store.
    if (node->getSymbolReference()->getSymbol()->isAtLeastOrStrongerThanAcquireRelease() &&
        cg->comp()->target().isSMP())
-      generateSynchronizationInstruction(cg, TR::InstOpCode::dmb, node, TR::InstOpCode::ishst);
+      {
+      if (canUseSTLR)
+         {
+         tempMR->simplify(node, cg);
+         storeOp = usingCompressedPointers ? TR::InstOpCode::stlrw : TR::InstOpCode::stlrx;
+         }
+      else
+         generateSynchronizationInstruction(cg, TR::InstOpCode::dmb, node, TR::InstOpCode::ishst);
+      }
 
    generateMemSrc1Instruction(cg, storeOp, node, tempMR, translatedSrcReg);
 
    // Issue a StoreLoad barrier after each volatile store.
-   if (node->getSymbolReference()->getSymbol()->isVolatile() && cg->comp()->target().isSMP())
+   if (node->getSymbolReference()->getSymbol()->isVolatile() && cg->comp()->target().isSMP() && !canUseSTLR)
       generateSynchronizationInstruction(cg, TR::InstOpCode::dmb, node, TR::InstOpCode::ish);
 
    wrtbarEvaluator(node, sourceRegister, destinationRegister, secondChild->isNonNull(), cg);
@@ -4250,16 +4283,14 @@ J9::ARM64::TreeEvaluator::monentEvaluator(TR::Node *node, TR::CodeGenerator *cg)
       TR::Register *tempReg = srm->findOrCreateScratchRegister();
 
       generateLabelInstruction(cg, TR::InstOpCode::label, node, loopLabel);
-      op = fej9->generateCompressedLockWord() ? TR::InstOpCode::ldxrw : TR::InstOpCode::ldxrx;
+      op = fej9->generateCompressedLockWord() ? TR::InstOpCode::ldaxrw : TR::InstOpCode::ldaxrx;
       faultingInstruction = generateTrg1MemInstruction(cg, op, node, dataReg, TR::MemoryReference::createWithDisplacement(cg, addrReg, 0));
 
       generateCompareBranchInstruction(cg, TR::InstOpCode::cbnzx, node, dataReg, OOLLabel);
-      op = fej9->generateCompressedLockWord() ? TR::InstOpCode::stxrw : TR::InstOpCode::stxrx;
+      op = fej9->generateCompressedLockWord() ? TR::InstOpCode::stlxrw : TR::InstOpCode::stlxrx;
 
       generateTrg1MemSrc1Instruction(cg, op, node, tempReg, TR::MemoryReference::createWithDisplacement(cg, addrReg, 0), metaReg);
       generateCompareBranchInstruction(cg, TR::InstOpCode::cbnzx, node, tempReg, loopLabel);
-
-      generateSynchronizationInstruction(cg, TR::InstOpCode::dmb, node, TR::InstOpCode::ish);
 
       srm->reclaimScratchRegister(tempReg);
       }
