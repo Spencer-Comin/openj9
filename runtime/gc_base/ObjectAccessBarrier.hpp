@@ -50,7 +50,7 @@ class MM_ObjectAccessBarrier : public MM_BaseVirtual
 	/* data members */
 private:
 protected:
-	MM_GCExtensions *_extensions; 
+	MM_GCExtensions *_extensions;
 	MM_Heap *_heap;
 #if defined(OMR_GC_COMPRESSED_POINTERS)
 #if defined(OMR_GC_FULL_POINTERS)
@@ -171,7 +171,7 @@ protected:
 		}
 		return (void *)(arrayletLeafBase + (elementSize * (UDATA)arrayletOffset));
 	}
-	
+
 	virtual mm_j9object_t readObjectImpl(J9VMThread *vmThread, mm_j9object_t srcObject, fj9object_t *srcAddress, bool isVolatile=false);
 	virtual mm_j9object_t staticReadObjectImpl(J9VMThread *vmThread, J9Class *clazz, j9object_t *srcAddress, bool isVolatile=false);
 	virtual mm_j9object_t readObjectFromInternalVMSlotImpl(J9VMThread *vmThread, j9object_t *srcAddress, bool isVolatile=false);
@@ -201,7 +201,11 @@ protected:
 	virtual void storeI64Impl(J9VMThread *vmThread, mm_j9object_t destObject, I_64 *destAddress, I_64 value, bool isVolatile=false);
 
 	void protectIfVolatileBefore(J9VMThread *vmThread, bool isVolatile, bool isRead, bool isWide);
+	void protectReadImplIfVolatileBefore(J9VMThread *vmThread, bool isVolatile, bool isWide);
+	void protectStoreImplIfVolatileBefore(J9VMThread *vmThread, bool isVolatile, bool isWide);
 	void protectIfVolatileAfter(J9VMThread *vmThread, bool isVolatile, bool isRead, bool isWide);
+	void protectReadImplIfVolatileAfter(J9VMThread *vmThread, bool isVolatile, bool isWide);
+	void protectStoreImplIfVolatileAfter(J9VMThread *vmThread, bool isVolatile, bool isWide);
 	void printNativeMethod(J9VMThread* vmThread);
 
 public:
@@ -262,8 +266,8 @@ public:
 		ARRAY_COPY_NOT_DONE = -2
 	};
 
-	virtual I_32 doCopyContiguousForward(J9VMThread *vmThread, J9IndexableObject *srcObject, J9IndexableObject *destObject, I_32 srcIndex, I_32 destIndex, I_32 lengthInSlots);	
-	virtual I_32 doCopyContiguousBackward(J9VMThread *vmThread, J9IndexableObject *srcObject, J9IndexableObject *destObject, I_32 srcIndex, I_32 destIndex, I_32 lengthInSlots);	
+	virtual I_32 doCopyContiguousForward(J9VMThread *vmThread, J9IndexableObject *srcObject, J9IndexableObject *destObject, I_32 srcIndex, I_32 destIndex, I_32 lengthInSlots);
+	virtual I_32 doCopyContiguousBackward(J9VMThread *vmThread, J9IndexableObject *srcObject, J9IndexableObject *destObject, I_32 srcIndex, I_32 destIndex, I_32 lengthInSlots);
 	virtual I_32 backwardReferenceArrayCopyIndex(J9VMThread *vmThread, J9IndexableObject *srcObject, J9IndexableObject *destObject, I_32 srcIndex, I_32 destIndex, I_32 lengthInSlots) { return -2; }
 	virtual I_32 forwardReferenceArrayCopyIndex(J9VMThread *vmThread, J9IndexableObject *srcObject, J9IndexableObject *destObject, I_32 srcIndex, I_32 destIndex, I_32 lengthInSlots) { return -2; }
 
@@ -315,7 +319,7 @@ public:
 	virtual void postObjectStore(J9VMThread *vmThread, J9Object *destObject, fj9object_t *destAddress, J9Object *value, bool isVolatile=false);
 	virtual void postObjectStore(J9VMThread *vmThread, J9Class *destClass, J9Object **destAddress, J9Object *value, bool isVolatile=false);
 	virtual void postObjectStore(J9VMThread *vmThread, J9Object **destAddress, J9Object *value, bool isVolatile=false);
-	
+
 	virtual bool postBatchObjectStore(J9VMThread *vmThread, J9Object *destObject, bool isVolatile=false);
 	virtual bool postBatchObjectStore(J9VMThread *vmThread, J9Class *destClass, bool isVolatile=false);
 
@@ -339,37 +343,37 @@ public:
 	}
 
 	/**
-	 * Special barrier for auto-remembering stack-referenced objects. This must be called 
+	 * Special barrier for auto-remembering stack-referenced objects. This must be called
 	 * in two cases:
 	 * 1) an object which was allocated directly into old space.
 	 * 2) an object which is being constructed via JNI
-	 * 
+	 *
 	 * @param vmThread[in] the current thread
-	 * @param object[in] the object to be remembered 
+	 * @param object[in] the object to be remembered
 	 */
-	virtual void 
-	recentlyAllocatedObject(J9VMThread *vmThread, J9Object *object) 
-	{ 
+	virtual void
+	recentlyAllocatedObject(J9VMThread *vmThread, J9Object *object)
+	{
 		/* empty default implementation */
 	};
-	
+
 	/**
 	 * Record that the specified class is stored in the specified ClassLoader.
 	 * There are three cases in which this must be called:
 	 * 1 - when a newly loaded class stored in its defining loader's table
 	 * 2 - when a newly loaded array class is stored in its component class's arrayClass field
 	 * 3 - when a foreign class is stored in another loader's table
-	 * 
+	 *
 	 * @param[in] vmThread the current thread
 	 * @param[in] destClassLoader the referencing ClassLoader
 	 * @param[in] srcClass the referenced class
 	 */
-	virtual void 
+	virtual void
 	postStoreClassToClassLoader(J9VMThread *vmThread, J9ClassLoader *destClassLoader, J9Class *srcClass)
 	{
 		/* Default behaviour is to do nothing. Only collectors which implement JAZZ 18309 require this barrier. */
 	}
-	
+
 	/**
 	 * Record that the specified module is stored in the specified ClassLoader.
 	 * There is one cases at the moment in which this must be called:
@@ -388,10 +392,10 @@ public:
 	/**
 	 * Converts token (e.g. compressed pointer value) into real heap pointer.
 	 * @return the heap pointer value.
-	 * 
+	 *
 	 * @note this function is not virtual because it must be callable from out-of-process
 	 */
-	MMINLINE mm_j9object_t 
+	MMINLINE mm_j9object_t
 	convertPointerFromToken(fj9object_t token)
 	{
 		mm_j9object_t result = (mm_j9object_t)(uintptr_t)token;
@@ -402,14 +406,14 @@ public:
 #endif /* defined(OMR_GC_COMPRESSED_POINTERS) */
 		return result;
 	}
-	
+
 	/**
 	 * Converts real heap pointer into token (e.g. compressed pointer value).
 	 * @return the compressed pointer value.
-	 * 
+	 *
 	 * @note this function is not virtual because it must be callable from out-of-process
 	 */
-	MMINLINE fj9object_t 
+	MMINLINE fj9object_t
 	convertTokenFromPointer(mm_j9object_t pointer)
 	{
 		fj9object_t result = (fj9object_t)(uintptr_t)pointer;
@@ -424,11 +428,11 @@ public:
 	/**
 	 * Returns the value to shift a pointer by when converting between the compressed pointers heap and real heap
 	 * @return The shift value.
-	 * 
+	 *
 	 * @note this function is not virtual because it must be callable from out-of-process
-	 * 
+	 *
 	 */
-	MMINLINE UDATA 
+	MMINLINE UDATA
 	compressedPointersShift()
 	{
 		UDATA shift = 0;
@@ -443,26 +447,26 @@ public:
 	virtual UDATA compressedPointersShadowHeapBase(J9VMThread *vmThread);
 	virtual UDATA compressedPointersShadowHeapTop(J9VMThread *vmThread);
 	virtual void fillArrayOfObjects(J9VMThread *vmThread, J9IndexableObject *destObject, I_32 destIndex, I_32 count, J9Object *value);
-	
+
 	virtual void initializeForNewThread(MM_EnvironmentBase* env) {};
-	
+
 	/**
 	 * Determine the basic hash code for the specified object. This may modify the object. For example, it may
 	 * set the HAS_BEEN_HASHED bit in the object's header. Object must not be NULL.
-	 * 
+	 *
 	 * @param vm[in] the VM
 	 * @param object[in] the object to be hashed
-	 * @return the persistent, basic hash code for the object 
+	 * @return the persistent, basic hash code for the object
 	 */
 	I_32 getObjectHashCode(J9JavaVM *vm, J9Object *object);
-	
+
 	/**
 	 * Set the finalize link field of object to value.
 	 * @param object the object to modify
 	 * @param value[in] the value to store into the object's finalizeLink field
 	 */
 	void setFinalizeLink(j9object_t object, j9object_t value);
-	
+
 	/**
 	 * Fetch the finalize link field of object.
 	 * @param object[in] the object to read
@@ -471,10 +475,10 @@ public:
 	MMINLINE j9object_t getFinalizeLink(j9object_t object)
 	{
 		fj9object_t* finalizeLink = getFinalizeLinkAddress(object);
-		GC_SlotObject slot(_extensions->getOmrVM(), finalizeLink);		
+		GC_SlotObject slot(_extensions->getOmrVM(), finalizeLink);
 		return slot.readReferenceFromSlot();
 	}
-	
+
 	/**
 	 * Fetch the finalize link field of object.
 	 * @param object[in] the object to read
@@ -484,11 +488,11 @@ public:
 	MMINLINE j9object_t getFinalizeLink(j9object_t object, J9Class *clazz)
 	{
 		fj9object_t* finalizeLink = getFinalizeLinkAddress(object, clazz);
-		GC_SlotObject slot(_extensions->getOmrVM(), finalizeLink);		
+		GC_SlotObject slot(_extensions->getOmrVM(), finalizeLink);
 		return slot.readReferenceFromSlot();
 	}
 
-	
+
 	/**
 	 * Set the reference link field of the specified reference object to value.
 	 * @param object the object to modify
@@ -505,7 +509,7 @@ public:
 	{
 		UDATA linkOffset = _referenceLinkOffset;
 		fj9object_t *referenceLink = (fj9object_t*)((UDATA)object + linkOffset);
-		GC_SlotObject slot(_extensions->getOmrVM(), referenceLink);		
+		GC_SlotObject slot(_extensions->getOmrVM(), referenceLink);
 		return slot.readReferenceFromSlot();
 	}
 
@@ -526,7 +530,7 @@ public:
 	{
 		UDATA linkOffset = _ownableSynchronizerLinkOffset;
 		fj9object_t *ownableSynchronizerLink = (fj9object_t*)((UDATA)object + linkOffset);
-		GC_SlotObject slot(_extensions->getOmrVM(), ownableSynchronizerLink);		
+		GC_SlotObject slot(_extensions->getOmrVM(), ownableSynchronizerLink);
 		j9object_t next = slot.readReferenceFromSlot();
 		if (originalObject == next) {
 			/* reach end of list(last item points to itself), return NULL */
@@ -544,7 +548,7 @@ public:
 	{
 		UDATA linkOffset = _ownableSynchronizerLinkOffset;
 		fj9object_t *ownableSynchronizerLink = (fj9object_t*)((UDATA)object + linkOffset);
-		GC_SlotObject slot(_extensions->getOmrVM(), ownableSynchronizerLink);		
+		GC_SlotObject slot(_extensions->getOmrVM(), ownableSynchronizerLink);
 		j9object_t next = slot.readReferenceFromSlot();
 		if (object == next) {
 			/* reach end of list(last item points to itself), return NULL */
@@ -563,7 +567,7 @@ public:
 	{
 		UDATA linkOffset = _ownableSynchronizerLinkOffset;
 		fj9object_t *ownableSynchronizerLink = (fj9object_t*)((UDATA)object + linkOffset);
-		GC_SlotObject slot(_extensions->getOmrVM(), ownableSynchronizerLink);		
+		GC_SlotObject slot(_extensions->getOmrVM(), ownableSynchronizerLink);
 		return slot.readReferenceFromSlot();
 	}
 
@@ -651,7 +655,7 @@ public:
 #if defined(J9VM_GC_DYNAMIC_CLASS_UNLOADING)
 	/**
 	 * Check is class alive
-	 * Required to prevent visibility of dead classes in incremental GC policies 
+	 * Required to prevent visibility of dead classes in incremental GC policies
 	 * The real implementation done for Real Time GC
 	 * @param javaVM pointer to J9JavaVM
 	 * @param classPtr class to check

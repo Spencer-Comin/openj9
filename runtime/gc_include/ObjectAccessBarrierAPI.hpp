@@ -46,6 +46,18 @@
 
 #define J9OAB_MIXEDOBJECT_EA(object, offset, type) (type *)(((U_8 *)(object)) + offset)
 
+#if __cplusplus >= 201103L
+#include <atomic>
+#define USE_CPP11_ATOMICS
+#define STORE_IMPL(type, destAddress, value, isVolatile) \
+	std::atomic_store_explicit(reinterpret_cast<std::atomic<type>*>(destAddress), (value), (isVolatile) ? std::memory_order_seq_cst : std::memory_order_relaxed)
+#define READ_IMPL(type, srcAddress, isVolatile) \
+	std::atomic_load_explicit(reinterpret_cast<std::atomic<type>*>(srcAddress), (isVolatile) ? std::memory_order_seq_cst : std::memory_order_relaxed)
+#else /* __cplusplus >= 201103L */
+#define STORE_IMPL(type, destAddress, value, isVolatile) (*(destAddress) = (value))
+#define READ_IMPL(type, srcAddress, isVolatile) (*(srcAddress))
+#endif /* __cplusplus >= 201103L */
+
 class MM_ObjectAccessBarrierAPI
 {
 	friend class MM_ObjectAccessBarrier;
@@ -345,7 +357,7 @@ public:
 	cloneArray(J9VMThread *currentThread, j9object_t original, j9object_t copy, J9Class *objectClass, U_32 size, MM_objectMapFunction objectMapFunction = NULL, void *objectMapData = NULL, bool initializeLockWord = true)
 	{
 		/* Note: initializeLockWord is ignored as arrays never have inline lockwords */
-#if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER) 
+#if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		currentThread->javaVM->memoryManagerFunctions->j9gc_objaccess_cloneIndexableObject(currentThread, (J9IndexableObject*)original, (J9IndexableObject*)copy), objectMapFunction, objectMapData;
 #else /* defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER) */
 		if (OBJECT_HEADER_SHAPE_POINTERS == J9CLASS_SHAPE(objectClass)) {
@@ -380,14 +392,14 @@ public:
 		copyObjectFields(currentThread, objectClass, original, offset, copy, offset, objectMapFunction, objectMapData, initializeLockWord);
 	}
 
-	VMINLINE void 
+	VMINLINE void
 	copyObjectFieldsToFlattenedArrayElement(J9VMThread *vmThread, J9ArrayClass *arrayClazz, j9object_t srcObject, J9IndexableObject *arrayRef, UDATA index)
 	{
 		/* TODO optimizations for non-arraylet path will be added in the future */
 		vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_copyObjectFieldsToFlattenedArrayElement(vmThread, arrayClazz, srcObject, arrayRef, (I_32)index);
 	}
-	
-	VMINLINE void 
+
+	VMINLINE void
 	copyObjectFieldsFromFlattenedArrayElement(J9VMThread *vmThread, J9ArrayClass *arrayClazz, j9object_t destObject, J9IndexableObject *arrayRef, UDATA index)
 	{
 		/* TODO optimizations for non-arraylet path will be added in the future */
@@ -483,12 +495,12 @@ public:
 		return vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_mixedObjectReadObject(vmThread, srcObject, srcOffset, isVolatile);
 #elif defined(J9VM_GC_COMBINATION_SPEC)
 		fj9object_t *actualAddress = J9OAB_MIXEDOBJECT_EA(srcObject, srcOffset, fj9object_t);
-		
+
 		preMixedObjectReadObject(vmThread, srcObject, actualAddress);
-				
-		protectIfVolatileBefore(isVolatile, true);
+
+		protectReadImplIfVolatileBefore(isVolatile);
 		j9object_t result = readObjectImpl(vmThread, actualAddress, isVolatile);
-		protectIfVolatileAfter(isVolatile, true);
+		protectReadImplIfVolatileAfter(isVolatile);
 
 		return result;
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -512,7 +524,7 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_mixedObjectStoreObject(vmThread, srcObject, srcOffset, value, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		if (j9gc_modron_wrtbar_always == _writeBarrierType) {
 			vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_mixedObjectStoreObject(vmThread, srcObject, srcOffset, value, isVolatile);
 		} else {
@@ -520,9 +532,9 @@ public:
 
 			preMixedObjectStoreObject(vmThread, srcObject, actualAddress, value);
 
-			protectIfVolatileBefore(isVolatile, false);
+			protectStoreImplIfVolatileBefore(isVolatile);
 			storeObjectImpl(vmThread, actualAddress, value, isVolatile);
-			protectIfVolatileAfter(isVolatile, false);
+			protectStoreImplIfVolatileAfter(isVolatile);
 
 			postMixedObjectStoreObject(vmThread, srcObject, actualAddress, value);
 		}
@@ -552,7 +564,7 @@ public:
 
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		return (1 == vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_compareAndSwapObject(vmThread, destObject, (J9Object **)destAddress, compareObject, swapObject));
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		if (j9gc_modron_wrtbar_always == _writeBarrierType) {
 			return (1 == vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_compareAndSwapObject(vmThread, destObject, (J9Object **)destAddress, compareObject, swapObject));
 		} else {
@@ -634,9 +646,9 @@ public:
 #elif defined(J9VM_GC_COMBINATION_SPEC)
 		I_8 *actualAddress = J9OAB_MIXEDOBJECT_EA(srcObject, srcOffset, I_8);
 
-		protectIfVolatileBefore(isVolatile, true);
+		protectReadImplIfVolatileBefore(isVolatile);
 		I_8 result = readI8Impl(vmThread, actualAddress, isVolatile);
-		protectIfVolatileAfter(isVolatile, true);
+		protectReadImplIfVolatileAfter(isVolatile);
 
 		return result;
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -662,9 +674,9 @@ public:
 #elif defined(J9VM_GC_COMBINATION_SPEC)
 		I_8 *actualAddress = J9OAB_MIXEDOBJECT_EA(srcObject, srcOffset, I_8);
 
-		protectIfVolatileBefore(isVolatile, false);
+		protectStoreImplIfVolatileBefore(isVolatile);
 		storeI8Impl(vmThread, actualAddress, value, isVolatile);
-		protectIfVolatileAfter(isVolatile, false);
+		protectStoreImplIfVolatileAfter(isVolatile);
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
 #error unsupported barrier
 #endif /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -686,9 +698,9 @@ public:
 #elif defined(J9VM_GC_COMBINATION_SPEC)
 		U_8 *actualAddress = J9OAB_MIXEDOBJECT_EA(srcObject, srcOffset, U_8);
 
-		protectIfVolatileBefore(isVolatile, true);
+		protectReadImplIfVolatileBefore(isVolatile);
 		U_8 result = readU8Impl(vmThread, actualAddress, isVolatile);
-		protectIfVolatileAfter(isVolatile, true);
+		protectReadImplIfVolatileAfter(isVolatile);
 
 		return result;
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -714,9 +726,9 @@ public:
 #elif defined(J9VM_GC_COMBINATION_SPEC)
 		U_8 *actualAddress = J9OAB_MIXEDOBJECT_EA(srcObject, srcOffset, U_8);
 
-		protectIfVolatileBefore(isVolatile, false);
+		protectStoreImplIfVolatileBefore(isVolatile);
 		storeU8Impl(vmThread, actualAddress, value, isVolatile);
-		protectIfVolatileAfter(isVolatile, false);
+		protectStoreImplIfVolatileAfter(isVolatile);
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
 #error unsupported barrier
 #endif /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -738,9 +750,9 @@ public:
 #elif defined(J9VM_GC_COMBINATION_SPEC)
 		I_16 *actualAddress = J9OAB_MIXEDOBJECT_EA(srcObject, srcOffset, I_16);
 
-		protectIfVolatileBefore(isVolatile, true);
+		protectReadImplIfVolatileBefore(isVolatile);
 		I_16 result = readI16Impl(vmThread, actualAddress, isVolatile);
-		protectIfVolatileAfter(isVolatile, true);
+		protectReadImplIfVolatileAfter(isVolatile);
 
 		return result;
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -766,9 +778,9 @@ public:
 #elif defined(J9VM_GC_COMBINATION_SPEC)
 		I_16 *actualAddress = J9OAB_MIXEDOBJECT_EA(srcObject, srcOffset, I_16);
 
-		protectIfVolatileBefore(isVolatile, false);
+		protectStoreImplIfVolatileBefore(isVolatile);
 		storeI16Impl(vmThread, actualAddress, value, isVolatile);
-		protectIfVolatileAfter(isVolatile, false);
+		protectStoreImplIfVolatileAfter(isVolatile);
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
 #error unsupported barrier
 #endif /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -790,9 +802,9 @@ public:
 #elif defined(J9VM_GC_COMBINATION_SPEC)
 		U_16 *actualAddress = J9OAB_MIXEDOBJECT_EA(srcObject, srcOffset, U_16);
 
-		protectIfVolatileBefore(isVolatile, true);
+		protectReadImplIfVolatileBefore(isVolatile);
 		U_16 result = readU16Impl(vmThread, actualAddress, isVolatile);
-		protectIfVolatileAfter(isVolatile, true);
+		protectReadImplIfVolatileAfter(isVolatile);
 
 		return result;
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -818,9 +830,9 @@ public:
 #elif defined(J9VM_GC_COMBINATION_SPEC)
 		U_16 *actualAddress = J9OAB_MIXEDOBJECT_EA(srcObject, srcOffset, U_16);
 
-		protectIfVolatileBefore(isVolatile, false);
+		protectStoreImplIfVolatileBefore(isVolatile);
 		storeU16Impl(vmThread, actualAddress, value, isVolatile);
-		protectIfVolatileAfter(isVolatile, false);
+		protectStoreImplIfVolatileAfter(isVolatile);
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
 #error unsupported barrier
 #endif /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -841,12 +853,12 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		return (I_32)vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_mixedObjectReadI32(vmThread, srcObject, srcOffset, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		I_32 *actualAddress = J9OAB_MIXEDOBJECT_EA(srcObject, srcOffset, I_32);
 
-		protectIfVolatileBefore(isVolatile, true);
+		protectReadImplIfVolatileBefore(isVolatile);
 		I_32 result = readI32Impl(vmThread, actualAddress, isVolatile);
-		protectIfVolatileAfter(isVolatile, true);
+		protectReadImplIfVolatileAfter(isVolatile);
 
 		return result;
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -870,12 +882,12 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_mixedObjectStoreI32(vmThread, srcObject, srcOffset, value, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		I_32 *actualAddress = J9OAB_MIXEDOBJECT_EA(srcObject, srcOffset, I_32);
 
-		protectIfVolatileBefore(isVolatile, false);
+		protectStoreImplIfVolatileBefore(isVolatile);
 		storeI32Impl(vmThread, actualAddress, value, isVolatile);
-		protectIfVolatileAfter(isVolatile, false);
+		protectStoreImplIfVolatileAfter(isVolatile);
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
 #error unsupported barrier
 #endif /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -894,12 +906,12 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		return (U_32)vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_mixedObjectReadU32(vmThread, srcObject, srcOffset, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		U_32 *actualAddress = J9OAB_MIXEDOBJECT_EA(srcObject, srcOffset, U_32);
 
-		protectIfVolatileBefore(isVolatile, true);
+		protectReadImplIfVolatileBefore(isVolatile);
 		U_32 result = readU32Impl(vmThread, actualAddress, isVolatile);
-		protectIfVolatileAfter(isVolatile, true);
+		protectReadImplIfVolatileAfter(isVolatile);
 
 		return result;
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -923,12 +935,12 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_mixedObjectStoreU32(vmThread, srcObject, srcOffset, value, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		U_32 *actualAddress = J9OAB_MIXEDOBJECT_EA(srcObject, srcOffset, U_32);
 
-		protectIfVolatileBefore(isVolatile, false);
+		protectStoreImplIfVolatileBefore(isVolatile);
 		storeU32Impl(vmThread, actualAddress, value, isVolatile);
-		protectIfVolatileAfter(isVolatile, false);
+		protectStoreImplIfVolatileAfter(isVolatile);
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
 #error unsupported barrier
 #endif /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -945,7 +957,7 @@ public:
 	 * @param compareObject the object to compare with
 	 * @param swapObject the value to be swapped in
 	 * @param isVolatile non-zero if the field is volatile, zero otherwise
-	 * 
+	 *
 	 * @return true on success, false otherwise
 	 */
 	VMINLINE bool
@@ -953,7 +965,7 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		return (1 == vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_mixedObjectCompareAndSwapInt(vmThread, destObject, destOffset, compareValue, swapValue));
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		U_32 *actualAddress = J9OAB_MIXEDOBJECT_EA(destObject, destOffset, U_32);
 
 		protectIfVolatileBefore(isVolatile, false);
@@ -1011,12 +1023,12 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		return vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_mixedObjectReadI64(vmThread, srcObject, srcOffset, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		I_64 *actualAddress = J9OAB_MIXEDOBJECT_EA(srcObject, srcOffset, I_64);
 
-		protectIfVolatileBefore(isVolatile, true);
+		protectReadImplIfVolatileBefore(isVolatile);
 		I_64 result = readI64Impl(vmThread, actualAddress, isVolatile);
-		protectIfVolatileAfter(isVolatile, true);
+		protectReadImplIfVolatileAfter(isVolatile);
 
 		return result;
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -1040,12 +1052,12 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_mixedObjectStoreI64(vmThread, srcObject, srcOffset, value, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		I_64 *actualAddress = J9OAB_MIXEDOBJECT_EA(srcObject, srcOffset, I_64);
 
-		protectIfVolatileBefore(isVolatile, false);
+		protectStoreImplIfVolatileBefore(isVolatile);
 		storeI64Impl(vmThread, actualAddress, value, isVolatile);
-		protectIfVolatileAfter(isVolatile, false);
+		protectStoreImplIfVolatileAfter(isVolatile);
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
 #error unsupported barrier
 #endif /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -1064,12 +1076,12 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		return vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_mixedObjectReadU64(vmThread, srcObject, srcOffset, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		U_64 *actualAddress = J9OAB_MIXEDOBJECT_EA(srcObject, srcOffset, U_64);
 
-		protectIfVolatileBefore(isVolatile, true);
+		protectReadImplIfVolatileBefore(isVolatile);
 		U_64 result = readU64Impl(vmThread, actualAddress, isVolatile);
-		protectIfVolatileAfter(isVolatile, true);
+		protectReadImplIfVolatileAfter(isVolatile);
 
 		return result;
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -1093,12 +1105,12 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_mixedObjectStoreU64(vmThread, srcObject, srcOffset, value, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		U_64 *actualAddress = J9OAB_MIXEDOBJECT_EA(srcObject, srcOffset, U_64);
 
-		protectIfVolatileBefore(isVolatile, false);
+		protectStoreImplIfVolatileBefore(isVolatile);
 		storeU64Impl(vmThread, actualAddress, value, isVolatile);
-		protectIfVolatileAfter(isVolatile, false);
+		protectStoreImplIfVolatileAfter(isVolatile);
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
 #error unsupported barrier
 #endif /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -1115,7 +1127,7 @@ public:
 	 * @param compareObject the object to compare with
 	 * @param swapObject the value to be swapped in
 	 * @param isVolatile non-zero if the field is volatile, zero otherwise
-	 * 
+	 *
 	 * @return true on success, false otherwise
 	 */
 	VMINLINE bool
@@ -1123,7 +1135,7 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		return (1 == vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_mixedObjectCompareAndSwapLong(vmThread, destObject, destOffset, compareValue, swapValue));
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		U_64 *actualAddress = J9OAB_MIXEDOBJECT_EA(destObject, destOffset, U_64);
 
 		protectIfVolatileBefore(isVolatile, false);
@@ -1181,13 +1193,13 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		return vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_staticReadObject(vmThread, clazz, srcAddress, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 
 		preStaticReadObject(vmThread, clazz, srcAddress);
 
-		protectIfVolatileBefore(isVolatile, true);
+		protectReadImplIfVolatileBefore(isVolatile);
 		j9object_t result = staticReadObjectImpl(vmThread, srcAddress, isVolatile);
-		protectIfVolatileAfter(isVolatile, true);
+		protectReadImplIfVolatileAfter(isVolatile);
 
 		/* TODO handle postReadBarrier if RTJ every becomes combo */
 
@@ -1213,7 +1225,7 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_staticStoreObject(vmThread, clazz, srcAddress, value, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		if (j9gc_modron_wrtbar_always == _writeBarrierType) {
 			vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_staticStoreObject(vmThread, clazz, srcAddress, value, isVolatile);
 		} else {
@@ -1221,9 +1233,9 @@ public:
 
 			preStaticStoreObject(vmThread, classObject, srcAddress, value);
 
-			protectIfVolatileBefore(isVolatile, false);
+			protectStoreImplIfVolatileBefore(isVolatile);
 			staticStoreObjectImpl(vmThread, srcAddress, value, isVolatile);
-			protectIfVolatileAfter(isVolatile, false);
+			protectStoreImplIfVolatileAfter(isVolatile);
 
 			postStaticStoreObject(vmThread, classObject, srcAddress, value);
 		}
@@ -1243,7 +1255,7 @@ public:
 	 * @param compareObject the object to compare with
 	 * @param swapObject the value to be swapped in
 	 * @param isVolatile non-zero if the field is volatile, zero otherwise
-	 * 
+	 *
 	 * @return true on success, false otherwise
 	 */
 	VMINLINE bool
@@ -1251,7 +1263,7 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		return (1 == vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_staticCompareAndSwapObject(vmThread, clazz, destAddress, compareObject, swapObject));
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		if (j9gc_modron_wrtbar_always == _writeBarrierType) {
 			return (1 == vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_staticCompareAndSwapObject(vmThread, clazz, destAddress, compareObject, swapObject));
 		} else {
@@ -1329,11 +1341,11 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		return (U_32)vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_staticReadU32(vmThread, clazz, srcAddress, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 
-		protectIfVolatileBefore(isVolatile, true);
+		protectReadImplIfVolatileBefore(isVolatile);
 		U_32 result = readU32Impl(vmThread, srcAddress, isVolatile);
-		protectIfVolatileAfter(isVolatile, true);
+		protectReadImplIfVolatileAfter(isVolatile);
 
 		return result;
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -1357,11 +1369,11 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_staticStoreU32(vmThread, clazz, srcAddress, value, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 
-		protectIfVolatileBefore(isVolatile, false);
+		protectStoreImplIfVolatileBefore(isVolatile);
 		storeU32Impl(vmThread, srcAddress, value, isVolatile);
-		protectIfVolatileAfter(isVolatile, false);
+		protectStoreImplIfVolatileAfter(isVolatile);
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
 #error unsupported barrier
 #endif /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -1378,7 +1390,7 @@ public:
 	 * @param compareObject the object to compare with
 	 * @param swapObject the value to be swapped in
 	 * @param isVolatile non-zero if the field is volatile, zero otherwise
-	 * 
+	 *
 	 * @return true on success, false otherwise
 	 */
 	VMINLINE bool
@@ -1386,7 +1398,7 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		return (1 == vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_staticCompareAndSwapInt(vmThread, clazz, destAddress, compareValue, swapValue));
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 
 		protectIfVolatileBefore(isVolatile, false);
 		bool result = compareAndSwapU32Impl(vmThread, destAddress, compareValue, swapValue, isVolatile);
@@ -1441,11 +1453,11 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		return vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_staticReadU64(vmThread, clazz, srcAddress, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 
-		protectIfVolatileBefore(isVolatile, true);
+		protectReadImplIfVolatileBefore(isVolatile);
 		U_64 result =  readU64Impl(vmThread, srcAddress, isVolatile);
-		protectIfVolatileAfter(isVolatile, true);
+		protectReadImplIfVolatileAfter(isVolatile);
 
 		return result;
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -1469,11 +1481,11 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_staticStoreU64(vmThread, clazz, srcAddress, value, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 
-		protectIfVolatileBefore(isVolatile, false);
+		protectStoreImplIfVolatileBefore(isVolatile);
 		storeU64Impl(vmThread, srcAddress, value, isVolatile);
-		protectIfVolatileAfter(isVolatile, false);
+		protectStoreImplIfVolatileAfter(isVolatile);
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
 #error unsupported barrier
 #endif /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -1490,7 +1502,7 @@ public:
 	 * @param compareObject the object to compare with
 	 * @param swapObject the value to be swapped in
 	 * @param isVolatile non-zero if the field is volatile, zero otherwise
-	 * 
+	 *
 	 * @return true on success, false otherwise
 	 */
 	VMINLINE bool
@@ -1498,7 +1510,7 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		return (1 == vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_staticCompareAndSwapLong(vmThread, clazz, destAddress, compareValue, swapValue));
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 
 		protectIfVolatileBefore(isVolatile, false);
 		bool result = compareAndSwapU64Impl(vmThread, destAddress, compareValue, swapValue, isVolatile);
@@ -1555,12 +1567,12 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		return (I_8)vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_indexableReadI8(vmThread, (J9IndexableObject *)srcArray, (I_32)srcIndex, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		I_8 *actualAddress = J9JAVAARRAY_EA(vmThread, srcArray, srcIndex, I_8);
 
-		protectIfVolatileBefore(isVolatile, true);
+		protectReadImplIfVolatileBefore(isVolatile);
 		I_8 result = readI8Impl(vmThread, actualAddress, isVolatile);
-		protectIfVolatileAfter(isVolatile, true);
+		protectReadImplIfVolatileAfter(isVolatile);
 
 		return result;
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -1583,12 +1595,12 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_indexableStoreI8(vmThread, (J9IndexableObject *)srcArray, (I_32)srcIndex, (I_32)value, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		I_8 *actualAddress = J9JAVAARRAY_EA(vmThread, srcArray, srcIndex, I_8);
 
-		protectIfVolatileBefore(isVolatile, false);
+		protectStoreImplIfVolatileBefore(isVolatile);
 		storeI8Impl(vmThread, actualAddress, value, isVolatile);
-		protectIfVolatileAfter(isVolatile, false);
+		protectStoreImplIfVolatileAfter(isVolatile);
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
 #error unsupported barrier
 #endif /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -1608,12 +1620,12 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		return (U_8)vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_indexableReadU8(vmThread, (J9IndexableObject *)srcArray, (I_32)srcIndex, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		U_8 *actualAddress = J9JAVAARRAY_EA(vmThread, srcArray, srcIndex, U_8);
 
-		protectIfVolatileBefore(isVolatile, true);
+		protectReadImplIfVolatileBefore(isVolatile);
 		U_8 result = readU8Impl(vmThread, actualAddress, isVolatile);
-		protectIfVolatileAfter(isVolatile, true);
+		protectReadImplIfVolatileAfter(isVolatile);
 
 		return result;
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -1636,12 +1648,12 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_indexableStoreU8(vmThread, (J9IndexableObject *)srcArray, (I_32)srcIndex, value, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		U_8 *actualAddress = J9JAVAARRAY_EA(vmThread, srcArray, srcIndex, U_8);
 
-		protectIfVolatileBefore(isVolatile, false);
+		protectStoreImplIfVolatileBefore(isVolatile);
 		storeU8Impl(vmThread, actualAddress, value, isVolatile);
-		protectIfVolatileAfter(isVolatile, false);
+		protectStoreImplIfVolatileAfter(isVolatile);
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
 #error unsupported barrier
 #endif /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -1661,12 +1673,12 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		return (I_16)vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_indexableReadI16(vmThread, (J9IndexableObject *)srcArray, (I_32)srcIndex, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		I_16 *actualAddress = J9JAVAARRAY_EA(vmThread, srcArray, srcIndex, I_16);
 
-		protectIfVolatileBefore(isVolatile, true);
+		protectReadImplIfVolatileBefore(isVolatile);
 		I_16 result = readI16Impl(vmThread, actualAddress, isVolatile);
-		protectIfVolatileAfter(isVolatile, true);
+		protectReadImplIfVolatileAfter(isVolatile);
 
 		return result;
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -1689,12 +1701,12 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_indexableStoreI16(vmThread, (J9IndexableObject *)srcArray, (I_32)srcIndex, value, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		I_16 *actualAddress = J9JAVAARRAY_EA(vmThread, srcArray, srcIndex, I_16);
 
-		protectIfVolatileBefore(isVolatile, false);
+		protectStoreImplIfVolatileBefore(isVolatile);
 		storeI16Impl(vmThread, actualAddress, value, isVolatile);
-		protectIfVolatileAfter(isVolatile, false);
+		protectStoreImplIfVolatileAfter(isVolatile);
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
 #error unsupported barrier
 #endif /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -1714,12 +1726,12 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		return (U_16)vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_indexableReadU16(vmThread, (J9IndexableObject *)srcArray, (I_32)srcIndex, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		U_16 *actualAddress = J9JAVAARRAY_EA(vmThread, srcArray, srcIndex, U_16);
 
-		protectIfVolatileBefore(isVolatile, true);
+		protectReadImplIfVolatileBefore(isVolatile);
 		U_16 result = readU16Impl(vmThread, actualAddress, isVolatile);
-		protectIfVolatileAfter(isVolatile, true);
+		protectReadImplIfVolatileAfter(isVolatile);
 
 		return result;
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -1742,12 +1754,12 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_indexableStoreU16(vmThread, (J9IndexableObject *)srcArray, (I_32)srcIndex, value, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		U_16 *actualAddress = J9JAVAARRAY_EA(vmThread, srcArray, srcIndex, U_16);
 
-		protectIfVolatileBefore(isVolatile, false);
+		protectStoreImplIfVolatileBefore(isVolatile);
 		storeU16Impl(vmThread, actualAddress, value, isVolatile);
-		protectIfVolatileAfter(isVolatile, false);
+		protectStoreImplIfVolatileAfter(isVolatile);
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
 #error unsupported barrier
 #endif /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -1767,12 +1779,12 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		return (I_32)vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_indexableReadI32(vmThread, (J9IndexableObject *)srcArray, (I_32)srcIndex, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		I_32 *actualAddress = J9JAVAARRAY_EA(vmThread, srcArray, srcIndex, I_32);
 
-		protectIfVolatileBefore(isVolatile, true);
+		protectReadImplIfVolatileBefore(isVolatile);
 		I_32 result = readI32Impl(vmThread, actualAddress, isVolatile);
-		protectIfVolatileAfter(isVolatile, true);
+		protectReadImplIfVolatileAfter(isVolatile);
 
 		return result;
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -1795,12 +1807,12 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_indexableStoreI32(vmThread, (J9IndexableObject *)srcArray, (I_32)srcIndex, value, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		I_32 *actualAddress = J9JAVAARRAY_EA(vmThread, srcArray, srcIndex, I_32);
 
-		protectIfVolatileBefore(isVolatile, false);
+		protectStoreImplIfVolatileBefore(isVolatile);
 		storeI32Impl(vmThread, actualAddress, value, isVolatile);
-		protectIfVolatileAfter(isVolatile, false);
+		protectStoreImplIfVolatileAfter(isVolatile);
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
 #error unsupported barrier
 #endif /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -1820,12 +1832,12 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		return (U_32)vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_indexableReadU32(vmThread, (J9IndexableObject *)srcArray, (I_32)srcIndex, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		U_32 *actualAddress = J9JAVAARRAY_EA(vmThread, srcArray, srcIndex, U_32);
 
-		protectIfVolatileBefore(isVolatile, true);
+		protectReadImplIfVolatileBefore(isVolatile);
 		U_32 result = readU32Impl(vmThread, actualAddress, isVolatile);
-		protectIfVolatileAfter(isVolatile, true);
+		protectReadImplIfVolatileAfter(isVolatile);
 
 		return result;
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -1848,12 +1860,12 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_indexableStoreI32(vmThread, (J9IndexableObject *)srcArray, (I_32)srcIndex, value, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		U_32 *actualAddress = J9JAVAARRAY_EA(vmThread, srcArray, srcIndex, U_32);
 
-		protectIfVolatileBefore(isVolatile, false);
+		protectStoreImplIfVolatileBefore(isVolatile);
 		storeU32Impl(vmThread, actualAddress, value, isVolatile);
-		protectIfVolatileAfter(isVolatile, false);
+		protectStoreImplIfVolatileAfter(isVolatile);
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
 #error unsupported barrier
 #endif /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -1870,13 +1882,13 @@ public:
 	 * @param compareObject the object to compare with
 	 * @param swapObject the value to be swapped in
 	 * @param isVolatile non-zero if the field is volatile, zero otherwise
-	 * 
+	 *
 	 * @return true on success, false otherwise
 	 */
 	VMINLINE bool
 	inlineIndexableObjectCompareAndSwapU32(J9VMThread *vmThread, j9object_t destArray, UDATA destIndex, U_32 compareValue, U_32 swapValue, bool isVolatile = false)
 	{
-#if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER) || defined(J9VM_GC_COMBINATION_SPEC) 
+#if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER) || defined(J9VM_GC_COMBINATION_SPEC)
 		U_32 *actualAddress = J9JAVAARRAY_EA(vmThread, destArray, destIndex, U_32);
 
 		protectIfVolatileBefore(isVolatile, false);
@@ -1933,12 +1945,12 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		return vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_indexableReadI64(vmThread, (J9IndexableObject *)srcArray, (I_32)srcIndex, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		I_64 *actualAddress = J9JAVAARRAY_EA(vmThread, srcArray, srcIndex, I_64);
 
-		protectIfVolatileBefore(isVolatile, true);
+		protectReadImplIfVolatileBefore(isVolatile);
 		I_64 result = readI64Impl(vmThread, actualAddress, isVolatile);
-		protectIfVolatileAfter(isVolatile, true);
+		protectReadImplIfVolatileAfter(isVolatile);
 
 		return result;
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -1961,12 +1973,12 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_indexableStoreI64(vmThread, (J9IndexableObject *)srcArray, (I_32)srcIndex, value, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		I_64 *actualAddress = J9JAVAARRAY_EA(vmThread, srcArray, srcIndex, I_64);
 
-		protectIfVolatileBefore(isVolatile, false);
+		protectStoreImplIfVolatileBefore(isVolatile);
 		storeI64Impl(vmThread, actualAddress, value, isVolatile);
-		protectIfVolatileAfter(isVolatile, false);
+		protectStoreImplIfVolatileAfter(isVolatile);
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
 #error unsupported barrier
 #endif /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -1986,12 +1998,12 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		return vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_indexableReadU64(vmThread, (J9IndexableObject *)srcArray, (I_32)srcIndex, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		U_64 *actualAddress = J9JAVAARRAY_EA(vmThread, srcArray, srcIndex, U_64);
 
-		protectIfVolatileBefore(isVolatile, true);
+		protectReadImplIfVolatileBefore(isVolatile);
 		U_64 result = readU64Impl(vmThread, actualAddress, isVolatile);
-		protectIfVolatileAfter(isVolatile, true);
+		protectReadImplIfVolatileAfter(isVolatile);
 
 		return result;
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -2014,12 +2026,12 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_indexableStoreU64(vmThread, (J9IndexableObject *)srcArray, (I_32)srcIndex, value, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		U_64 *actualAddress = J9JAVAARRAY_EA(vmThread, srcArray, srcIndex, U_64);
 
-		protectIfVolatileBefore(isVolatile, false);
+		protectStoreImplIfVolatileBefore(isVolatile);
 		storeU64Impl(vmThread, actualAddress, value, isVolatile);
-		protectIfVolatileAfter(isVolatile, false);
+		protectStoreImplIfVolatileAfter(isVolatile);
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
 #error unsupported barrier
 #endif /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -2036,13 +2048,13 @@ public:
 	 * @param compareObject the object to compare with
 	 * @param swapObject the value to be swapped in
 	 * @param isVolatile non-zero if the field is volatile, zero otherwise
-	 * 
+	 *
 	 * @return true on success, false otherwise
 	 */
 	VMINLINE bool
 	inlineIndexableObjectCompareAndSwapU64(J9VMThread *vmThread, j9object_t destArray, UDATA destIndex, U_64 compareValue, U_64 swapValue, bool isVolatile = false)
 	{
-#if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER) || defined(J9VM_GC_COMBINATION_SPEC) 
+#if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER) || defined(J9VM_GC_COMBINATION_SPEC)
 		U_64 *actualAddress = J9JAVAARRAY_EA(vmThread, destArray, destIndex, U_64);
 
 		protectIfVolatileBefore(isVolatile, false);
@@ -2099,7 +2111,7 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		return vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_indexableReadObject(vmThread, (J9IndexableObject *)srcArray, (I_32)srcIndex, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC)  
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		fj9object_t *actualAddress = NULL;
 		if (J9VMTHREAD_COMPRESS_OBJECT_REFERENCES(vmThread)) {
 			actualAddress = (fj9object_t*)J9JAVAARRAY_EA(vmThread, srcArray, srcIndex, U_32);
@@ -2109,9 +2121,9 @@ public:
 
 		preIndexableObjectReadObject(vmThread, srcArray, actualAddress);
 
-		protectIfVolatileBefore(isVolatile, true);
+		protectReadImplIfVolatileBefore(isVolatile);
 		j9object_t result = readObjectImpl(vmThread, actualAddress, isVolatile);
-		protectIfVolatileAfter(isVolatile, true);
+		protectReadImplIfVolatileAfter(isVolatile);
 
 		return result;
 #else /* J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER */
@@ -2134,7 +2146,7 @@ public:
 	{
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_indexableStoreObject(vmThread, (J9IndexableObject *)srcArray, (I_32)srcIndex, value, isVolatile);
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		if (j9gc_modron_wrtbar_always == _writeBarrierType) {
 			vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_indexableStoreObject(vmThread, (J9IndexableObject *)srcArray, (I_32)srcIndex, value, isVolatile);
 		} else {
@@ -2147,9 +2159,9 @@ public:
 
 			preIndexableObjectStoreObject(vmThread, srcArray, actualAddress, value);
 
-			protectIfVolatileBefore(isVolatile, false);
+			protectStoreImplIfVolatileBefore(isVolatile);
 			storeObjectImpl(vmThread, actualAddress, value, isVolatile);
-			protectIfVolatileAfter(isVolatile, false);
+			protectStoreImplIfVolatileAfter(isVolatile);
 
 			postIndexableObjectStoreObject(vmThread, srcArray, actualAddress, value);
 		}
@@ -2169,7 +2181,7 @@ public:
 	 * @param compareObject the object to compare with
 	 * @param swapObject the value to be swapped in
 	 * @param isVolatile non-zero if the field is volatile, zero otherwise
-	 * 
+	 *
 	 * @return true on success, false otherwise
 	 */
 	VMINLINE bool
@@ -2184,7 +2196,7 @@ public:
 
 #if defined(J9VM_GC_ALWAYS_CALL_OBJECT_ACCESS_BARRIER)
 		return (1 == vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_compareAndSwapObject(vmThread, destArray, (J9Object **)actualAddress, compareObject, swapObject));
-#elif defined(J9VM_GC_COMBINATION_SPEC) 
+#elif defined(J9VM_GC_COMBINATION_SPEC)
 		if (j9gc_modron_wrtbar_always == _writeBarrierType) {
 			return (1 == vmThread->javaVM->memoryManagerFunctions->j9gc_objaccess_compareAndSwapObject(vmThread, destArray, (J9Object **)actualAddress, compareObject, swapObject));
 		} else {
@@ -2260,7 +2272,7 @@ public:
 	 * these collectors the objects must be in tenure space.
 	 *
 	 * Note, the stack must be walkable as a GC may occur during this function.
-	 * 
+	 *
 	 * Note, this doesn't handle arrays.
 	 *
 	 * @param vmThread The current vmThread
@@ -2405,19 +2417,19 @@ protected:
 	{
 		internalPreReadObject(vmThread, object, srcAddress);
 	}
-	
+
 	/**
 	 * Perform the preRead barrier for a reference slot within an indexable heap object
 	 *
 	 * @param object this is the heap object being read from
 	 * @param sreAddress the address of the slot being read
-	 */	
+	 */
 	VMINLINE void
 	preIndexableObjectReadObject(J9VMThread *vmThread, j9object_t object, fj9object_t *srcAddress)
 	{
 		internalPreReadObject(vmThread, object, srcAddress);
 	}
-	
+
 	/**
 	 * Read a non-object address (pointer to internal VM data) from an object.
 	 * This function is only concerned with moving the actual data. Do not re-implement
@@ -2429,7 +2441,7 @@ protected:
 	VMINLINE void *
 	readAddressImpl(J9VMThread *vmThread, void **srcAddress, bool isVolatile)
 	{
-		return *srcAddress;
+		return READ_IMPL(void*, srcAddress, isVolatile);
 	}
 
 	/**
@@ -2443,7 +2455,7 @@ protected:
 	VMINLINE I_16
 	readI16Impl(J9VMThread *vmThread, I_16 *srcAddress, bool isVolatile)
 	{
-		return *srcAddress;
+		return READ_IMPL(I_16, srcAddress, isVolatile);
 	}
 
 	/**
@@ -2457,7 +2469,7 @@ protected:
 	VMINLINE U_16
 	readU16Impl(J9VMThread *vmThread, U_16 *srcAddress, bool isVolatile)
 	{
-		return *srcAddress;
+		return READ_IMPL(U_16, srcAddress, isVolatile);
 	}
 
 	/**
@@ -2471,7 +2483,7 @@ protected:
 	VMINLINE I_32
 	readI32Impl(J9VMThread *vmThread, I_32 *srcAddress, bool isVolatile)
 	{
-		return *srcAddress;
+		return READ_IMPL(I_32, srcAddress, isVolatile);
 	}
 
 	/**
@@ -2485,7 +2497,7 @@ protected:
 	VMINLINE U_32
 	readU32Impl(J9VMThread *vmThread, U_32 *srcAddress, bool isVolatile)
 	{
-		return *srcAddress;
+		return READ_IMPL(U_32, srcAddress, isVolatile);
 	}
 
 	/**
@@ -2499,12 +2511,12 @@ protected:
 	VMINLINE I_64
 	readI64Impl(J9VMThread *vmThread, I_64 *srcAddress, bool isVolatile)
 	{
-#if !defined(J9VM_ENV_DATA64)
+#if !defined(J9VM_ENV_DATA64) && !defined (USE_CPP11_ATOMICS)
 		if (isVolatile) {
 			return longVolatileRead(vmThread, (U_64 *)srcAddress);
 		}
 #endif /* J9VM_ENV_DATA64 */
-		return *srcAddress;
+		return READ_IMPL(I_64, srcAddress, isVolatile);
 	}
 
 	/**
@@ -2518,12 +2530,12 @@ protected:
 	VMINLINE U_64
 	readU64Impl(J9VMThread *vmThread, U_64 *srcAddress, bool isVolatile)
 	{
-#if !defined(J9VM_ENV_DATA64)
+#if !defined(J9VM_ENV_DATA64) && !defined (USE_CPP11_ATOMICS)
 		if (isVolatile) {
 			return longVolatileRead(vmThread, srcAddress);
 		}
 #endif /* J9VM_ENV_DATA64 */
-		return *srcAddress;
+		return READ_IMPL(U_64, srcAddress, isVolatile);
 	}
 
 	/**
@@ -2537,7 +2549,7 @@ protected:
 	VMINLINE I_8
 	readI8Impl(J9VMThread *vmThread, I_8 *srcAddress, bool isVolatile)
 	{
-		return *srcAddress;
+		return READ_IMPL(I_8, srcAddress, isVolatile);
 	}
 
 	/**
@@ -2551,7 +2563,7 @@ protected:
 	VMINLINE U_8
 	readU8Impl(J9VMThread *vmThread, U_8 *srcAddress, bool isVolatile)
 	{
-		return *srcAddress;
+		return READ_IMPL(U_8, srcAddress, isVolatile);
 	}
 
 	/**
@@ -2567,19 +2579,19 @@ protected:
 	{
 		mm_j9object_t result = NULL;
 		if (J9VMTHREAD_COMPRESS_OBJECT_REFERENCES(vmThread)) {
-			result = internalConvertPointerFromToken((fj9object_t)(UDATA)*(U_32*)srcAddress);
+			result = internalConvertPointerFromToken((fj9object_t)(UDATA)READ_IMPL(U_32, srcAddress, isVolatile));
 		} else {
-			result = (mm_j9object_t)*(UDATA*)srcAddress;
+			result = (mm_j9object_t)READ_IMPL(UDATA, srcAddress, isVolatile);
 		}
 		return result;
 	}
-	
+
 	/**
 	 * Called before reading a reference class static slot
 	 *
 	 * @param object - the class object being read from
 	 * @param srcAddress - the address the slot read from
-	 */	
+	 */
 	VMINLINE void
 	preStaticReadObject(J9VMThread *vmThread, J9Class *clazz, j9object_t *srcAddress)
 	{
@@ -2587,7 +2599,7 @@ protected:
 			vmThread->javaVM->memoryManagerFunctions->J9ReadBarrierClass(vmThread, srcAddress);
 		}
 	}
-	
+
 
 	/**
 	 * Read a static object field.
@@ -2615,7 +2627,7 @@ protected:
 	VMINLINE void
 	storeAddressImpl(J9VMThread *vmThread, void **destAddress, void *value, bool isVolatile)
 	{
-		*destAddress = value;
+		STORE_IMPL(void*, destAddress, value, isVolatile);
 	}
 
 	/**
@@ -2630,7 +2642,7 @@ protected:
 	VMINLINE void
 	storeI16Impl(J9VMThread *vmThread, I_16 *destAddress, I_16 value, bool isVolatile)
 	{
-		*destAddress = value;
+		STORE_IMPL(I_16, destAddress, value, isVolatile);
 	}
 
 	/**
@@ -2645,7 +2657,7 @@ protected:
 	VMINLINE void
 	storeU16Impl(J9VMThread *vmThread, U_16 *destAddress, U_16 value, bool isVolatile)
 	{
-		*destAddress = value;
+		STORE_IMPL(U_16, destAddress, value, isVolatile);
 	}
 
 	/**
@@ -2660,7 +2672,7 @@ protected:
 	VMINLINE void
 	storeI32Impl(J9VMThread *vmThread, I_32 *destAddress, I_32 value, bool isVolatile)
 	{
-		*destAddress = value;
+		STORE_IMPL(I_32, destAddress, value, isVolatile);
 	}
 
 	/**
@@ -2675,7 +2687,7 @@ protected:
 	VMINLINE void
 	storeU32Impl(J9VMThread *vmThread, U_32 *destAddress, U_32 value, bool isVolatile)
 	{
-		*destAddress = value;
+		STORE_IMPL(U_32, destAddress, value, isVolatile);
 	}
 
 	VMINLINE bool
@@ -2702,13 +2714,13 @@ protected:
 	VMINLINE void
 	storeI64Impl(J9VMThread *vmThread, I_64 *destAddress, I_64 value, bool isVolatile)
 	{
-#if !defined(J9VM_ENV_DATA64)
+#if !defined(J9VM_ENV_DATA64) && !defined (USE_CPP11_ATOMICS)
 		if (isVolatile) {
 			longVolatileWrite(vmThread, (U_64 *)destAddress, (U_64 *)&value);
 			return;
 		}
 #endif /* J9VM_ENV_DATA64 */
-		*destAddress = value;
+		STORE_IMPL(I_64, destAddress, value, isVolatile);
 	}
 
 	/**
@@ -2723,13 +2735,13 @@ protected:
 	VMINLINE void
 	storeU64Impl(J9VMThread *vmThread, U_64 *destAddress, U_64 value, bool isVolatile)
 	{
-#if !defined(J9VM_ENV_DATA64)
+#if !defined(J9VM_ENV_DATA64) && !defined (USE_CPP11_ATOMICS)
 		if (isVolatile) {
 			longVolatileWrite(vmThread, destAddress, &value);
 			return;
 		}
 #endif /* J9VM_ENV_DATA64 */
-		*destAddress = value;
+		STORE_IMPL(U_64, destAddress, value, isVolatile);
 	}
 
 	VMINLINE bool
@@ -2756,7 +2768,7 @@ protected:
 	VMINLINE void
 	storeI8Impl(J9VMThread *vmThread, I_8 *destAddress, I_8 value, bool isVolatile)
 	{
-		*destAddress = value;
+		STORE_IMPL(I_8, destAddress, value, isVolatile);
 	}
 
 	/**
@@ -2771,7 +2783,7 @@ protected:
 	VMINLINE void
 	storeU8Impl(J9VMThread *vmThread, U_8 *destAddress, U_8 value, bool isVolatile)
 	{
-		*destAddress = value;
+		STORE_IMPL(U_8, destAddress, value, isVolatile);
 	}
 
 	/**
@@ -2786,9 +2798,9 @@ protected:
 	storeObjectImpl(J9VMThread *vmThread, fj9object_t *destAddress, mm_j9object_t value, bool isVolatile)
 	{
 		if (J9VMTHREAD_COMPRESS_OBJECT_REFERENCES(vmThread)) {
-			*(U_32*)destAddress = (U_32)internalConvertTokenFromPointer(value);
+			STORE_IMPL(U_32, destAddress, (U_32)internalConvertTokenFromPointer(value), isVolatile);
 		} else {
-			*(UDATA*)destAddress = (UDATA)value;
+			STORE_IMPL(UDATA, destAddress, (UDATA)value, isVolatile);
 		}
 	}
 
@@ -2867,6 +2879,22 @@ protected:
 		}
 	}
 
+	VMINLINE static void
+	protectReadImplIfVolatileBefore(bool isVolatile)
+	{
+#if !defined(USE_CPP11_ATOMICS)
+		protectReadImplIfVolatileBefore(isVolatile);
+#endif /* !USE_CPP11_ATOMICS */
+	}
+
+	VMINLINE static void
+	protectWriteImplIfVolatileBefore(bool isVolatile)
+	{
+#if !defined(USE_CPP11_ATOMICS)
+		protectStoreImplIfVolatileBefore(isVolatile);
+#endif /* !USE_CPP11_ATOMICS */
+	}
+
 	/**
 	 * Call after a read or write of a possibly volatile field.
 	 *
@@ -2884,6 +2912,22 @@ protected:
 				VM_AtomicSupport::readWriteBarrier();
 			}
 		}
+	}
+
+	VMINLINE static void
+	protectReadImplIfVolatileAfter(bool isVolatile)
+	{
+#if !defined(USE_CPP11_ATOMICS)
+		protectReadImplIfVolatileAfter(isVolatile);
+#endif /* !USE_CPP11_ATOMICS */
+	}
+
+	VMINLINE static void
+	protectWriteImplIfVolatileAfter(bool isVolatile)
+	{
+#if !defined(USE_CPP11_ATOMICS)
+		protectStoreImplIfVolatileAfter(isVolatile);
+#endif /* !USE_CPP11_ATOMICS */
 	}
 
 	/**
@@ -3119,7 +3163,7 @@ private:
 			break;
 		}
 	}
-	
+
 	/**
 	 * Perform the preRead barrier for heap object reference slot
 	 * It's common API for both mixed and indexable objects
@@ -3234,5 +3278,9 @@ private:
 
 
 };
+
+#undef STORE_IMPL
+#undef READ_IMPL
+#undef USE_CPP11_ATOMICS
 
 #endif /* OBJECTACCESSBARRIERAPI_HPP_ */
