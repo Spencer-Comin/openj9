@@ -360,6 +360,7 @@ ifdef({METHOD_INVOCATION},{
 	movq qword ptr J9TR_cframe_jitFPRs+(4*8)[_rsp],xmm4
 	movq qword ptr J9TR_cframe_jitFPRs+(5*8)[_rsp],xmm5
 },{ dnl METHOD_INVOCATION
+ifelse(eval(ASM_JAVA_SPEC_VERSION >= 17), 1, {
 	mov r8,J9TR_VMThread_javaVM[J9VMTHREAD]
 	mov r8d,J9TR_JavaVM_extendedRuntimeFlags3[r8]
 	test r8d,(J9TR_J9_EXTENDED_RUNTIME3_USE_VECTOR_LENGTH_256 | J9TR_J9_EXTENDED_RUNTIME3_USE_VECTOR_LENGTH_512)
@@ -377,6 +378,7 @@ ifdef({METHOD_INVOCATION},{
 
 	dnl save XMM registers
 	LABEL(L_xmm_save{}SYM_COUNT):
+})
 	EMIT_VZEROUPPER_IF_AVX()
 	movdqa J9TR_cframe_jitFPRs+(0*16)[_rsp],xmm0
 	movdqa J9TR_cframe_jitFPRs+(1*16)[_rsp],xmm1
@@ -384,9 +386,10 @@ ifdef({METHOD_INVOCATION},{
 	movdqa J9TR_cframe_jitFPRs+(3*16)[_rsp],xmm3
 	movdqa J9TR_cframe_jitFPRs+(4*16)[_rsp],xmm4
 	movdqa J9TR_cframe_jitFPRs+(5*16)[_rsp],xmm5
-
+ifelse(eval(ASM_JAVA_SPEC_VERSION >= 17), 1, {
 	LABEL(L_save_volatile_done{}SYM_COUNT):
 	INC_SYM_COUNT()
+})
 }) dnl METHOD_INVOCATION
 })
 
@@ -399,6 +402,7 @@ ifdef({METHOD_INVOCATION},{
 	movq xmm4,qword ptr J9TR_cframe_jitFPRs+(4*8)[_rsp]
 	movq xmm5,qword ptr J9TR_cframe_jitFPRs+(5*8)[_rsp]
 },{ dnl METHOD_INVOCATION
+ifelse(eval(ASM_JAVA_SPEC_VERSION >= 17), 1, {
 	dnl J9TR_J9_EXTENDED_RUNTIME3_USE_VECTOR_LENGTH_256 marks if we are using AVX-2 (eg YMM)
 	dnl J9TR_J9_EXTENDED_RUNTIME3_USE_VECTOR_LENGTH_512 marks if we are using AVX-512 (eg ZMM)
 	dnl No flags means normal SSE registers (XMM)
@@ -419,14 +423,17 @@ ifdef({METHOD_INVOCATION},{
 
 	dnl restore XMM registers
 	LABEL(L_xmm_restore{}SYM_COUNT):
+})
 	movdqa xmm0,J9TR_cframe_jitFPRs+(0*16)[_rsp]
 	movdqa xmm1,J9TR_cframe_jitFPRs+(1*16)[_rsp]
 	movdqa xmm2,J9TR_cframe_jitFPRs+(2*16)[_rsp]
 	movdqa xmm3,J9TR_cframe_jitFPRs+(3*16)[_rsp]
 	movdqa xmm4,J9TR_cframe_jitFPRs+(4*16)[_rsp]
 	movdqa xmm5,J9TR_cframe_jitFPRs+(5*16)[_rsp]
+ifelse(eval(ASM_JAVA_SPEC_VERSION >= 17), 1, {
 	LABEL(L_restore_volatile_done{}SYM_COUNT):
 	INC_SYM_COUNT()
+})
 }) dnl METHOD_INVOCATION
 	mov rax,qword ptr J9TR_cframe_rax[_rsp]
 	mov rcx,qword ptr J9TR_cframe_rcx[_rsp]
@@ -494,6 +501,7 @@ ifdef({METHOD_INVOCATION},{
 	movq qword ptr J9TR_cframe_jitFPRs+(6*8)[_rsp],xmm6
 	movq qword ptr J9TR_cframe_jitFPRs+(7*8)[_rsp],xmm7
 },{ dnl METHOD_INVOCATION
+ifelse(eval(ASM_JAVA_SPEC_VERSION >= 17), 1, {
 	dnl J9TR_J9_EXTENDED_RUNTIME3_USE_VECTOR_LENGTH_256 marks if we are using AVX-2 (eg YMM)
 	dnl J9TR_J9_EXTENDED_RUNTIME3_USE_VECTOR_LENGTH_512 marks if we are using AVX-512 (eg ZMM)
 	dnl No flags means normal SSE registers (XMM)
@@ -514,6 +522,7 @@ ifdef({METHOD_INVOCATION},{
 
 	dnl save XMM registers
 	LABEL(L_xmm_save{}SYM_COUNT):
+})
 	EMIT_VZEROUPPER_IF_AVX()
 	movdqa J9TR_cframe_jitFPRs+(0*16)[_rsp],xmm0
 	movdqa J9TR_cframe_jitFPRs+(1*16)[_rsp],xmm1
@@ -531,9 +540,10 @@ ifdef({METHOD_INVOCATION},{
 	movdqa J9TR_cframe_jitFPRs+(13*16)[_rsp],xmm13
 	movdqa J9TR_cframe_jitFPRs+(14*16)[_rsp],xmm14
 	movdqa J9TR_cframe_jitFPRs+(15*16)[_rsp],xmm15
-
+ifelse(eval(ASM_JAVA_SPEC_VERSION >= 17), 1, {
 	LABEL(L_save_volatile_done{}SYM_COUNT):
 	INC_SYM_COUNT()
+})
 }) dnl METHOD_INVOCATION
 })
 
@@ -548,7 +558,7 @@ ifdef({METHOD_INVOCATION},{
 	movq xmm6,qword ptr J9TR_cframe_jitFPRs+(6*8)[_rsp]
 	movq xmm7,qword ptr J9TR_cframe_jitFPRs+(7*8)[_rsp]
 },{ dnl METHOD_INVOCATION
-
+ifelse(eval(ASM_JAVA_SPEC_VERSION >= 17), 1, {
 	dnl J9TR_J9_EXTENDED_RUNTIME3_USE_VECTOR_LENGTH_256 marks if we are using AVX-2 (eg YMM)
 	dnl J9TR_J9_EXTENDED_RUNTIME3_USE_VECTOR_LENGTH_512 marks if we are using AVX-512 (eg ZMM)
 	dnl No flags means normal SSE registers (XMM)
@@ -569,6 +579,7 @@ ifdef({METHOD_INVOCATION},{
 
 	dnl restore XMM registers
 	LABEL(L_xmm_restore{}SYM_COUNT):
+})
 	movdqa xmm0,J9TR_cframe_jitFPRs+(0*16)[_rsp]
 	movdqa xmm1,J9TR_cframe_jitFPRs+(1*16)[_rsp]
 	movdqa xmm2,J9TR_cframe_jitFPRs+(2*16)[_rsp]
@@ -585,9 +596,10 @@ ifdef({METHOD_INVOCATION},{
 	movdqa xmm13,J9TR_cframe_jitFPRs+(13*16)[_rsp]
 	movdqa xmm14,J9TR_cframe_jitFPRs+(14*16)[_rsp]
 	movdqa xmm15,J9TR_cframe_jitFPRs+(15*16)[_rsp]
-
+ifelse(eval(ASM_JAVA_SPEC_VERSION >= 17), 1, {
 	LABEL(L_restore_volatile_done{}SYM_COUNT):
 	INC_SYM_COUNT()
+})
 }) dnl METHOD_INVOCATION
 	mov rax,qword ptr J9TR_cframe_rax[_rsp]
 	mov rcx,qword ptr J9TR_cframe_rcx[_rsp]

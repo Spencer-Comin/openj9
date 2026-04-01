@@ -48,7 +48,7 @@ target_include_directories(j9codert_vm
 )
 
 if(OMR_ARCH_X86)
-	if (OMR_ENV_DATA64)
+	if (JAVA_SPEC_VERSION GREATER_EQUAL 17)
 		j9vm_gen_asm(xnathelp.m4)
 		j9vm_gen_asm(xvector.m4)
 
